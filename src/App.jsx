@@ -1,485 +1,698 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Menu, X, ChevronRight, Phone, Mail, Download, Play, Image as ImageIcon, FileText, ArrowLeft, Calendar, Linkedin, ExternalLink, Wrench, Users, Warehouse, Search } from 'lucide-react';
-import Admin from './Admin.jsx';
+import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 
-const productCategories = [
-  { id: 'cooking', name: 'Cooking Equipment', icon: '\ud83d\udd25', description: 'Ranges, ovens, broilers, fryers, griddles, steamers', brandIds: ['americanRange', 'pizzaMaster', 'ultrafryer', 'angelopo', 'accutemp'] },
-  { id: 'refrigeration', name: 'Refrigeration & Ice', icon: '\u2744\ufe0f', description: 'Ice machines, blast chillers, freezers', brandIds: ['itv', 'fagor', 'afinox'] },
-  { id: 'food-prep', name: 'Food Preparation', icon: '\ud83d\udd2a', description: 'Slicers, grinders, vacuum sealers', brandIds: ['meatico', 'minipack'] },
-  { id: 'beverage', name: 'Beverage', icon: '\ud83c\udf7a', description: 'Juicers, draught systems', brandIds: ['zummo', 'chillrite'] },
-  { id: 'warewash', name: 'Warewashing & Sanitation', icon: '\ud83e\uddfc', description: 'Pan washers, glass polishers, cutlery dryers, oil filtration', brandIds: ['somengil', 'campus', 'frijado'] },
-  { id: 'storage', name: 'Storage & Transport', icon: '\ud83d\udce6', description: 'Racks, shelving, transport', brandIds: ['winholt'] }
-];
+const ADMIN_PASSWORD = 'gbscooks2024';
 
-const provinces = [
-  { name: 'British Columbia', abbr: 'BC', companies: 15, techs: 75, warehouse: true },
-  { name: 'Alberta', abbr: 'AB', companies: 12, techs: 60, warehouse: true },
-  { name: 'Saskatchewan', abbr: 'SK', companies: 7, techs: 35, warehouse: false },
-  { name: 'Manitoba', abbr: 'MB', companies: 7, techs: 35, warehouse: false },
-  { name: 'Ontario', abbr: 'ON', companies: 35, techs: 175, warehouse: true },
-  { name: 'Quebec', abbr: 'QC', companies: 22, techs: 110, warehouse: true },
-  { name: 'New Brunswick', abbr: 'NB', companies: 8, techs: 40, warehouse: false },
-  { name: 'Nova Scotia', abbr: 'NS', companies: 7, techs: 35, warehouse: false },
-  { name: 'Prince Edward Island', abbr: 'PEI', companies: 5, techs: 25, warehouse: false },
-  { name: 'Newfoundland', abbr: 'NL', companies: 5, techs: 25, warehouse: false }
-];
-
-const clientLogos = ['Client 1','Client 2','Client 3','Client 4','Client 5','Client 6','Client 7','Client 8','Client 9','Client 10'];
-
-function getPageFromHash() {
-  const hash = window.location.hash.replace('#/', '').replace('#', '');
-  if (!hash || hash === '/') return { page: 'home' };
-  if (hash === 'admin') return { page: 'admin' };
-  if (hash.startsWith('product/')) {
-    const parts = hash.split('/');
-    return { page: 'product-detail', brandSlug: parts[1], productSlug: parts[2] };
-  }
-  return { page: hash.split('/')[0] || 'home' };
-}
-
-function slugify(text) {
-  return (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
-// Hook to fetch brands from Supabase
-function useBrands() {
+export default function Admin() {
+  const [authed, setAuthed] = useState(false);
+  const [password, setPassword] = useState('');
+  const [tab, setTab] = useState('brands');
   const [brands, setBrands] = useState([]);
-  useEffect(() => {
-    supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || []));
-  }, []);
-  return brands;
-}
-
-// Hook to fetch all products with related data
-function useProducts() {
   const [products, setProducts] = useState([]);
-  useEffect(() => {
-    supabase.from('products').select('*, product_images(*), product_documents(*), product_specs(*), product_features(*)').order('name').then(({ data }) => setProducts(data || []));
-  }, []);
-  return products;
-}
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingBrand, setEditingBrand] = useState(null);
+  const [msg, setMsg] = useState('');
 
-// Hook to fetch published blog posts
-function useBlogPosts() {
-  const [posts, setPosts] = useState([]);
-  useEffect(() => {
-    supabase.from('blog_posts').select('*').eq('published', true).order('created_at', { ascending: false }).then(({ data }) => setPosts(data || []));
-  }, []);
-  return posts;
-}
-
-function App() {
-  const [route, setRoute] = useState(getPageFromHash());
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [navState, setNavState] = useState({});
-  const [scrolled, setScrolled] = useState(false);
-  const brands = useBrands();
-  const allProducts = useProducts();
-  const blogPosts = useBlogPosts();
-
-  const currentPage = route.page;
+  const showMsg = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3000); };
 
   useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', h);
-    return () => window.removeEventListener('scroll', h);
-  }, []);
+    if (authed) { fetchBrands(); fetchProducts(); }
+  }, [authed]);
 
-  useEffect(() => {
-    const h = () => setRoute(getPageFromHash());
-    window.addEventListener('hashchange', h);
-    return () => window.removeEventListener('hashchange', h);
-  }, []);
-
-  const navigate = (page, extra = {}) => {
-    setNavState(extra);
-    setMobileMenuOpen(false);
-    if (page === 'product-detail' && extra.product && extra.brandId) {
-      const brand = brands.find(b => b.id === extra.brandId);
-      const slug = slugify(extra.product.name);
-      const brandSlug = slugify(brand?.name || extra.brandId);
-      window.location.hash = `/product/${brandSlug}/${slug}`;
-    } else {
-      window.location.hash = page === 'home' ? '/' : `/${page}`;
-    }
-    window.scrollTo(0, 0);
+  const fetchBrands = async () => {
+    const { data } = await supabase.from('brands').select('*').order('name');
+    setBrands(data || []);
   };
 
-  // Find product by slug for direct URL access
-  const findProductBySlug = () => {
-    if (route.brandSlug && route.productSlug && allProducts.length > 0) {
-      return allProducts.find(p => {
-        const brand = brands.find(b => b.id === p.brand_id);
-        return slugify(brand?.name || p.brand_id) === route.brandSlug && slugify(p.name) === route.productSlug;
-      });
-    }
-    return null;
+  const fetchProducts = async () => {
+    const { data } = await supabase.from('products').select('*, product_images(*), product_documents(*), product_specs(*), product_features(*)').order('name');
+    setProducts(data || []);
   };
 
-  if (currentPage === 'admin') return <Admin />;
+  if (!authed) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+        <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 w-full max-w-md">
+          <h1 className="text-2xl font-bold text-white mb-2">GBS Admin Panel</h1>
+          <p className="text-gray-400 mb-6">Enter your admin password</p>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && password === ADMIN_PASSWORD) setAuthed(true); }} placeholder="Password" className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white mb-4 focus:outline-none focus:ring-2 focus:ring-red-500" />
+          <button onClick={() => { if (password === ADMIN_PASSWORD) setAuthed(true); else showMsg('Wrong password'); }} className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700">Log In</button>
+          {msg && <p className="text-red-400 mt-3 text-center">{msg}</p>}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-gray-900 shadow-lg' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <button onClick={() => navigate('home')} className="text-2xl font-bold tracking-tight"><span className="text-red-600">GBS</span><span className="text-white">COOKS</span></button>
-            <nav className="hidden md:flex items-center space-x-8">
-              <button onClick={() => navigate('home')} className="text-sm font-medium text-gray-300 hover:text-red-500">Home</button>
-              <button onClick={() => navigate('products')} className="text-sm font-medium text-gray-300 hover:text-red-500">Products</button>
-              <button onClick={() => navigate('about')} className="text-sm font-medium text-gray-300 hover:text-red-500">About</button>
-              <button onClick={() => navigate('service')} className="text-sm font-medium text-gray-300 hover:text-red-500">Service</button>
-              <div className="w-px h-6 bg-gray-700"></div>
-              <button onClick={() => navigate('blog')} className="text-sm font-medium text-gray-500 hover:text-red-500">The Drop</button>
-              <button onClick={() => navigate('demo')} className="bg-red-600 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-red-700">Book a Demo</button>
-            </nav>
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-white">{mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
-          </div>
+    <div className="min-h-screen bg-gray-950 text-white">
+      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <h1 className="text-xl font-bold"><span className="text-red-600">GBS</span> Admin</h1>
+          <a href="/#/" className="text-sm text-gray-400 hover:text-white">&larr; View Site</a>
         </div>
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-gray-900 border-t border-gray-800 px-4 py-4 space-y-3">
-            <button onClick={() => navigate('home')} className="block w-full text-left py-2 text-gray-300">Home</button>
-            <button onClick={() => navigate('products')} className="block w-full text-left py-2 text-gray-300">Products</button>
-            <button onClick={() => navigate('about')} className="block w-full text-left py-2 text-gray-300">About</button>
-            <button onClick={() => navigate('service')} className="block w-full text-left py-2 text-gray-300">Service</button>
-            <div className="border-t border-gray-800 pt-3"><button onClick={() => navigate('blog')} className="block w-full text-left py-2 text-gray-500">The Drop</button></div>
-            <button onClick={() => navigate('demo')} className="w-full bg-red-600 text-white px-6 py-3 rounded-full font-medium">Book a Demo</button>
-          </div>
-        )}
-      </header>
+        <button onClick={() => setAuthed(false)} className="text-sm text-gray-400 hover:text-white">Log Out</button>
+      </div>
 
-      <main className="pt-20">
-        {currentPage === 'home' && <HomePage navigate={navigate} brands={brands} blogPosts={blogPosts} />}
-        {currentPage === 'products' && <ProductsPage navigate={navigate} brands={brands} allProducts={allProducts} initialBrand={navState.brand} initialCategory={navState.category} />}
-        {currentPage === 'product-detail' && <ProductDetailPage navigate={navigate} brands={brands} product={navState.product || findProductBySlug()} brandId={navState.brandId} />}
-        {currentPage === 'about' && <AboutPage />}
-        {currentPage === 'service' && <ServicePage />}
-        {currentPage === 'blog' && <BlogPage blogPosts={blogPosts} />}
-        {currentPage === 'demo' && <DemoPage />}
-      </main>
+      {msg && <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg z-50 shadow-lg">{msg}</div>}
 
-      <footer className="bg-black text-white mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div><h3 className="text-xl font-bold mb-4">GBS Foodservice Equipment Inc</h3><p className="text-gray-400">Professional foodservice equipment</p></div>
-            <div><h4 className="font-semibold mb-4">Links</h4><div className="space-y-2">{['home','products','about','service'].map(p => <button key={p} onClick={() => navigate(p)} className="block text-gray-400 hover:text-white capitalize">{p}</button>)}<button onClick={() => navigate('blog')} className="block text-gray-400 hover:text-white">The Drop</button></div></div>
-            <div><h4 className="font-semibold mb-4">Resources</h4><button onClick={() => navigate('demo')} className="block text-gray-400 hover:text-white">Book a Demo</button><a href="https://www.linkedin.com/company/gbscooks" target="_blank" rel="noopener noreferrer" className="block text-gray-400 hover:text-white mt-2">LinkedIn</a></div>
-            <div><h4 className="font-semibold mb-4">Contact</h4><div className="flex items-center space-x-2 text-gray-400"><Mail size={16} /><span>info@gbscooks.com</span></div></div>
-          </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500 text-sm">&copy; 2024 GBS Foodservice Equipment Inc.</div>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-function HomePage({ navigate, brands, blogPosts }) {
-  const mapRef = useRef(null);
-  const [mapProgress, setMapProgress] = useState(0);
-  useEffect(() => {
-    const h = () => {
-      if (!mapRef.current) return;
-      const rect = mapRef.current.getBoundingClientRect();
-      const sH = mapRef.current.offsetHeight, vH = window.innerHeight;
-      if (rect.top <= 0 && rect.bottom >= vH) setMapProgress(Math.min(Math.max(Math.abs(rect.top) / (sH - vH), 0), 1));
-      else if (rect.top > 0) setMapProgress(0);
-      else setMapProgress(1);
-    };
-    window.addEventListener('scroll', h);
-    return () => window.removeEventListener('scroll', h);
-  }, []);
-  const pIdx = Math.min(Math.floor(mapProgress * provinces.length), provinces.length - 1);
-
-  return (
-    <>
-      <section className="relative h-screen flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-red-950"></div>
-        <div className="absolute inset-0 bg-black opacity-50"></div>
-        <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">Premium Equipment<br/>Unrivalled Support</h1>
-          <p className="text-xl md:text-2xl mb-8 text-gray-300 max-w-3xl mx-auto">Canada's trusted partner for professional foodservice equipment. Proudly Canadian, delivering coast-to-coast service and expertise.</p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button onClick={() => navigate('products')} className="bg-red-600 text-white px-8 py-4 rounded-full text-lg font-medium hover:bg-red-700">Explore Equipment</button>
-            <button onClick={() => navigate('demo')} className="bg-white text-gray-900 px-8 py-4 rounded-full text-lg font-medium hover:bg-gray-100">Book a Demo</button>
-          </div>
-        </div>
-      </section>
-
-      {/* Brands from database */}
-      <section className="py-20 bg-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16"><h2 className="text-4xl md:text-5xl font-bold mb-4">Our Brands</h2><p className="text-xl text-gray-400">Industry-leading manufacturers we proudly represent</p></div>
-          {brands.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-              {brands.map(b => (
-                <button key={b.id} onClick={() => navigate('products', { brand: b.id })} className="group bg-gray-900 hover:bg-gray-950 border border-gray-700 hover:border-red-600 p-8 rounded-2xl transition-all">
-                  {b.image_url ? (
-                    <div className="h-24 flex items-center justify-center mb-4"><img src={b.image_url} alt={b.name} className="max-h-full max-w-full object-contain" /></div>
-                  ) : (
-                    <div className="text-4xl font-bold text-gray-600 group-hover:text-red-600 mb-4 transition-colors">{b.logo}</div>
-                  )}
-                  <h3 className="text-xl font-bold mb-2">{b.name}</h3>
-                  <p className="text-sm text-gray-400 mb-4">{b.tagline}</p>
-                  <ChevronRight className="ml-auto text-gray-600 group-hover:text-red-600 transition-colors" />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-gray-500">Loading brands...</p>
-          )}
-        </div>
-      </section>
-
-      <section className="py-20 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center mb-16"><h2 className="text-4xl md:text-5xl font-bold mb-4">Why Choose GBS Foodservice Equipment</h2></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-3 gap-8">
-          {[{n:'01',t:'Quality Equipment',d:'We source only from manufacturers known for reliability and performance.'},{n:'02',t:'Expert Support',d:'Decades of foodservice experience to help you select the right equipment.'},{n:'03',t:'Long-Term Partnership',d:"Service that extends beyond the initial sale."}].map(c => (
-            <div key={c.n} className="bg-gray-800 border border-gray-700 p-8 rounded-2xl">
-              <div className="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mb-6"><div className="text-2xl font-bold text-red-500">{c.n}</div></div>
-              <h3 className="text-2xl font-bold mb-4">{c.t}</h3><p className="text-gray-400">{c.d}</p>
-            </div>
+      <div className="bg-gray-900 border-b border-gray-800 px-6">
+        <div className="flex space-x-6">
+          {['brands', 'products', 'images', 'import', 'blog'].map(t => (
+            <button key={t} onClick={() => { setTab(t); setEditingProduct(null); setEditingBrand(null); }} className={`py-4 font-semibold capitalize border-b-2 transition-colors ${tab === t ? 'border-red-600 text-red-500' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t}</button>
           ))}
         </div>
-      </section>
+      </div>
 
-      <section ref={mapRef} className="relative bg-black" style={{ height: '250vh' }}>
-        <div className="sticky top-0 h-screen flex items-center overflow-hidden">
-          <div className="w-full">
-            <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black to-transparent pt-16 pb-8"><div className="text-center"><h2 className="text-3xl md:text-5xl font-bold mb-3">Coast to Coast Coverage</h2><p className="text-lg text-gray-400">Scroll to explore our nationwide service network</p></div></div>
-            <div className="flex items-center h-screen" style={{ transform: `translateX(calc(${-pIdx * 340}px + 50vw - 160px))`, transition: 'transform 0.3s ease-out' }}>
-              <div className="flex items-center gap-6">
-                {provinces.map((pr, idx) => (
-                  <div key={pr.abbr} className={`flex-shrink-0 transition-all duration-500 ${idx === pIdx ? 'scale-105 opacity-100' : 'scale-90 opacity-40'}`} style={{ width: '320px' }}>
-                    <div className="bg-gradient-to-br from-gray-900 to-gray-950 rounded-2xl p-6 border-2 border-gray-700">
-                      <div className="text-5xl font-bold text-red-600 mb-3 text-center">{pr.abbr}</div>
-                      <h3 className="text-xl font-bold mb-4 text-center">{pr.name}</h3>
-                      <div className="space-y-3 bg-gray-800/50 rounded-xl p-4">
-                        <div className="flex items-center justify-between"><div className="flex items-center space-x-2"><Wrench size={18} className="text-red-500" /><span className="font-semibold text-sm">Service Companies</span></div><span className="text-xl font-bold text-red-500">{pr.companies}</span></div>
-                        <div className="flex items-center justify-between"><div className="flex items-center space-x-2"><Users size={18} className="text-red-500" /><span className="font-semibold text-sm">Technicians</span></div><span className="text-xl font-bold text-red-500">{pr.techs}</span></div>
-                        {pr.warehouse && <div className="flex items-center space-x-2 pt-2 border-t border-gray-700"><Warehouse size={18} className="text-green-500" /><span className="font-semibold text-sm">Warehouse & Parts</span></div>}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="absolute bottom-12 left-0 right-0 z-20"><div className="max-w-xl mx-auto px-4"><div className="bg-gray-800/50 rounded-full h-2 overflow-hidden"><div className="bg-red-600 h-full transition-all duration-300" style={{ width: `${mapProgress * 100}%` }} /></div><div className="text-center mt-3 text-sm">{provinces[pIdx].name}</div></div></div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16"><h2 className="text-4xl md:text-5xl font-bold mb-4">Shop by Category</h2><p className="text-xl text-gray-400">Find exactly what your kitchen needs</p></div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            {productCategories.map(c => (<button key={c.id} onClick={() => navigate('products', { category: c.id })} className="group bg-gray-800 hover:bg-gray-950 border border-gray-700 hover:border-red-600 p-8 rounded-2xl transition-all text-left"><div className="text-5xl mb-4">{c.icon}</div><h3 className="text-xl font-bold mb-2 group-hover:text-red-500 transition-colors">{c.name}</h3><p className="text-sm text-gray-400">{c.description}</p></button>))}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-12 bg-gray-800 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 mb-8"><h3 className="text-3xl font-bold text-center">Trusted by Leading Operations</h3></div>
-        <div className="relative"><div className="flex animate-scroll">{[...clientLogos,...clientLogos].map((l,i) => <div key={i} className="flex-shrink-0 mx-8 w-48 h-24 bg-gray-900 border border-gray-700 rounded-xl flex items-center justify-center"><span className="text-gray-500 font-semibold">{l}</span></div>)}</div></div>
-      </section>
-
-      <section className="py-20 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center mb-12">
-          <div className="flex items-center justify-center mb-4"><Linkedin className="text-blue-500 mr-3" size={40} /><h2 className="text-4xl md:text-5xl font-bold">Follow Our Journey</h2></div>
-          <p className="text-xl text-gray-400 mb-6">Stay connected with the latest from GBS Foodservice Equipment</p>
-          <a href="https://www.linkedin.com/company/gbscooks" target="_blank" rel="noopener noreferrer" className="inline-flex items-center bg-blue-600 text-white px-8 py-4 rounded-full text-lg font-medium hover:bg-blue-700">Visit Our LinkedIn <ExternalLink className="ml-2" size={20} /></a>
-        </div>
-      </section>
-
-      {/* Blog from database */}
-      <section className="py-20 bg-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-12"><div><h2 className="text-4xl md:text-5xl font-bold mb-4">The Drop</h2><p className="text-xl text-gray-400">Latest from the foodservice industry</p></div><button onClick={() => navigate('blog')} className="hidden md:flex items-center text-red-500 font-semibold hover:underline">View All <ChevronRight size={20} className="ml-1" /></button></div>
-          {blogPosts.length > 0 ? (
-            <div className="grid md:grid-cols-3 gap-8">
-              {blogPosts.slice(0, 3).map(p => (
-                <button key={p.id} onClick={() => navigate('blog')} className="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden hover:border-red-600 transition-all group text-left">
-                  {p.image_url ? <img src={p.image_url} alt={p.title} className="w-full h-48 object-cover border-b border-gray-700" /> : <div className="bg-gradient-to-br from-gray-800 to-gray-900 h-48 flex items-center justify-center border-b border-gray-700"><ImageIcon size={64} className="text-gray-600" /></div>}
-                  <div className="p-6">
-                    <div className="text-sm text-red-500 font-semibold mb-2">{p.category}</div>
-                    <h3 className="text-xl font-bold mb-2 group-hover:text-red-500 transition-colors">{p.title}</h3>
-                    <p className="text-gray-400 mb-4">{p.excerpt}</p>
-                    <div className="text-sm text-gray-500">{p.published_at ? new Date(p.published_at).toLocaleDateString() : ''}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-gray-500">No blog posts yet. Add them in the admin panel.</p>
-          )}
-        </div>
-      </section>
-
-      <section className="py-20 bg-gradient-to-r from-red-900 to-red-800"><div className="max-w-4xl mx-auto px-4 text-center"><h2 className="text-4xl md:text-5xl font-bold mb-6">Ready to Upgrade Your Kitchen?</h2><p className="text-xl mb-8 text-red-100">Schedule a demo with our equipment specialists</p><button onClick={() => navigate('demo')} className="bg-white text-red-900 px-8 py-4 rounded-full text-lg font-medium hover:bg-gray-100 inline-flex items-center"><Calendar className="mr-2" size={24} />Book Your Demo Today</button></div></section>
-
-      <style>{`@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}.animate-scroll{animation:scroll 30s linear infinite}.animate-scroll:hover{animation-play-state:paused}`}</style>
-    </>
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        {tab === 'brands' && <BrandsTab brands={brands} fetchBrands={fetchBrands} editingBrand={editingBrand} setEditingBrand={setEditingBrand} showMsg={showMsg} />}
+        {tab === 'products' && <ProductsTab brands={brands} products={products} fetchProducts={fetchProducts} editingProduct={editingProduct} setEditingProduct={setEditingProduct} showMsg={showMsg} />}
+        {tab === 'images' && <ImagesTab products={products} fetchProducts={fetchProducts} showMsg={showMsg} />}
+        {tab === 'import' && <ImportTab brands={brands} fetchProducts={fetchProducts} showMsg={showMsg} />}
+        {tab === 'blog' && <BlogTab showMsg={showMsg} />}
+      </div>
+    </div>
   );
 }
 
-function ProductsPage({ navigate, brands, allProducts, initialBrand, initialCategory }) {
-  const [activeBrand, setActiveBrand] = useState(initialBrand || null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState(initialCategory ? 'category' : 'brand');
-  const [activeCategory, setActiveCategory] = useState(initialCategory || null);
+function BrandsTab({ brands, fetchBrands, editingBrand, setEditingBrand, showMsg }) {
+  const [form, setForm] = useState({ id: '', name: '', tagline: '', logo: '' });
+  const [uploading, setUploading] = useState(false);
 
-  const getFilteredProducts = () => {
-    let prods = [];
-    if (viewMode === 'brand' && activeBrand) {
-      prods = allProducts.filter(p => p.brand_id === activeBrand);
-    } else if (viewMode === 'category' && activeCategory) {
-      const cat = productCategories.find(c => c.id === activeCategory);
-      if (cat) prods = allProducts.filter(p => cat.brandIds.includes(p.brand_id));
-    } else if (viewMode === 'all') {
-      prods = [...allProducts];
+  useEffect(() => {
+    if (editingBrand) setForm({ id: editingBrand.id, name: editingBrand.name, tagline: editingBrand.tagline || '', logo: editingBrand.logo || '' });
+    else setForm({ id: '', name: '', tagline: '', logo: '' });
+  }, [editingBrand]);
+
+  const saveBrand = async () => {
+    if (!form.id || !form.name) return showMsg('ID and Name are required');
+    if (editingBrand) {
+      await supabase.from('brands').update({ name: form.name, tagline: form.tagline, logo: form.logo }).eq('id', form.id);
+      showMsg('Brand updated!');
+    } else {
+      await supabase.from('brands').insert([form]);
+      showMsg('Brand added!');
     }
-    if (searchTerm) {
-      const s = searchTerm.toLowerCase();
-      prods = prods.filter(p => {
-        const bName = brands.find(b => b.id === p.brand_id)?.name || '';
-        return p.name.toLowerCase().includes(s) || p.model.toLowerCase().includes(s) || (p.category || '').toLowerCase().includes(s) || bName.toLowerCase().includes(s);
-      });
-    }
-    return prods;
+    setEditingBrand(null);
+    setForm({ id: '', name: '', tagline: '', logo: '' });
+    fetchBrands();
   };
 
-  const filteredProducts = getFilteredProducts();
-  const currentBrandInfo = brands.find(b => b.id === activeBrand);
+  const deleteBrand = async (id) => {
+    if (!confirm('Delete this brand? This will also delete all its products.')) return;
+    await supabase.from('brands').delete().eq('id', id);
+    showMsg('Brand deleted');
+    fetchBrands();
+  };
+
+  const uploadBrandImage = async (e, brandId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `brands/${brandId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-assets').upload(fileName, file);
+    if (error) { showMsg('Upload failed: ' + error.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('product-assets').getPublicUrl(fileName);
+    await supabase.from('brands').update({ image_url: publicUrl }).eq('id', brandId);
+    showMsg('Brand image uploaded!');
+    setUploading(false);
+    fetchBrands();
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">Our Products</h1><p className="text-xl text-gray-400">Professional equipment for every kitchen need</p></div></section>
-
-      <section className="bg-gray-800 border-b border-gray-700"><div className="max-w-7xl mx-auto px-4 py-6"><div className="flex flex-col md:flex-row gap-4 items-center"><div className="relative flex-1 w-full"><Search size={20} className="absolute left-4 top-3.5 text-gray-500" /><input type="text" placeholder="Search all products..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); if(e.target.value) { setViewMode('all'); setActiveBrand(null); setActiveCategory(null); } }} className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-full focus:outline-none focus:ring-2 focus:ring-red-500 text-white" /></div><div className="flex space-x-3"><button onClick={() => { setViewMode('brand'); setActiveCategory(null); if(!activeBrand && brands.length) setActiveBrand(brands[0].id); }} className={`px-5 py-2.5 rounded-full font-medium ${viewMode === 'brand' ? 'bg-red-600 text-white' : 'bg-gray-900 text-gray-400 border border-gray-700'}`}>By Brand</button><button onClick={() => { setViewMode('category'); setActiveBrand(null); if(!activeCategory) setActiveCategory('cooking'); }} className={`px-5 py-2.5 rounded-full font-medium ${viewMode === 'category' ? 'bg-red-600 text-white' : 'bg-gray-900 text-gray-400 border border-gray-700'}`}>By Category</button></div></div></div></section>
-
-      {viewMode === 'brand' && (
-        <section className="bg-gray-900 border-b border-gray-800 sticky top-20 z-40"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex overflow-x-auto space-x-3 pb-2">{brands.map(b => <button key={b.id} onClick={() => setActiveBrand(b.id)} className={`flex-shrink-0 px-5 py-2.5 rounded-full font-medium text-sm ${activeBrand === b.id ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>{b.name}</button>)}</div></div></section>
-      )}
-
-      {viewMode === 'category' && (
-        <section className="bg-gray-900 border-b border-gray-800 sticky top-20 z-40"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex overflow-x-auto space-x-3 pb-2">{productCategories.map(c => <button key={c.id} onClick={() => setActiveCategory(c.id)} className={`flex-shrink-0 px-5 py-2.5 rounded-full font-medium text-sm ${activeCategory === c.id ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>{c.icon} {c.name}</button>)}</div></div></section>
-      )}
-
-      <section className="py-12"><div className="max-w-7xl mx-auto px-4">
-        {viewMode === 'brand' && currentBrandInfo && <div className="mb-10"><h2 className="text-3xl font-bold mb-2">{currentBrandInfo.name}</h2><p className="text-lg text-gray-400">{currentBrandInfo.tagline}</p></div>}
-        {viewMode === 'category' && activeCategory && <div className="mb-10"><h2 className="text-3xl font-bold mb-2">{productCategories.find(c=>c.id===activeCategory)?.name}</h2><p className="text-lg text-gray-400">{productCategories.find(c=>c.id===activeCategory)?.description}</p></div>}
-        {searchTerm && viewMode === 'all' && <div className="mb-10"><h2 className="text-3xl font-bold mb-2">Search Results</h2><p className="text-lg text-gray-400">{filteredProducts.length} found for "{searchTerm}"</p></div>}
-
-        {filteredProducts.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredProducts.map((p) => {
-              const bInfo = brands.find(b => b.id === p.brand_id);
-              const mainImage = p.product_images?.sort((a,b) => a.sort_order - b.sort_order)[0];
-              return (
-                <button key={p.id} onClick={() => navigate('product-detail', { product: p, brandId: p.brand_id })} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden hover:border-red-600 transition-all group text-left">
-                  {mainImage ? <div className="bg-white h-64 flex items-center justify-center border-b border-gray-700 p-4"><img src={mainImage.image_url} alt={mainImage.alt_text} className="max-w-full max-h-full object-contain" /></div> : <div className="bg-gradient-to-br from-gray-700 to-gray-900 h-64 flex items-center justify-center border-b border-gray-700"><div className="text-5xl font-bold text-gray-600 group-hover:text-red-600 transition-colors">{bInfo?.logo}</div></div>}
-                  <div className="p-6">
-                    {viewMode !== 'brand' && <div className="text-xs text-gray-500 font-semibold mb-1">{bInfo?.name}</div>}
-                    <div className="text-sm text-red-500 font-semibold mb-2">{p.category}</div>
-                    <h3 className="text-xl font-bold mb-2 group-hover:text-red-500">{p.name}</h3>
-                    <p className="text-gray-400 mb-4">{p.description}</p>
-                    <div className="flex items-center justify-between"><span className="text-sm font-mono text-gray-500">{p.model}</span><span className="text-red-500 font-medium flex items-center">Details <ChevronRight size={16} className="ml-1" /></span></div>
-                  </div>
-                </button>
-              );
-            })}
+    <div>
+      <h2 className="text-2xl font-bold mb-6">{editingBrand ? 'Edit Brand' : 'Add New Brand'}</h2>
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Brand ID (lowercase, no spaces)</label>
+            <input value={form.id} onChange={e => setForm({...form, id: e.target.value})} disabled={!!editingBrand} placeholder="e.g. americanRange" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white disabled:opacity-50" />
           </div>
-        ) : (
-          <div className="text-center py-20"><Search size={64} className="mx-auto text-gray-600 mb-4" /><p className="text-xl text-gray-400">{searchTerm ? 'No products found.' : allProducts.length === 0 ? 'No products yet. Add them in the admin panel.' : 'Select a brand or category.'}</p></div>
-        )}
-      </div></section>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Display Name</label>
+            <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. American Range" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Tagline</label>
+            <input value={form.tagline} onChange={e => setForm({...form, tagline: e.target.value})} placeholder="e.g. Heavy Duty Cooking Equipment" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Logo Text (2-3 letters, fallback if no image)</label>
+            <input value={form.logo} onChange={e => setForm({...form, logo: e.target.value})} placeholder="e.g. AR" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+          </div>
+        </div>
+        <div className="flex space-x-3">
+          <button onClick={saveBrand} className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700">{editingBrand ? 'Update Brand' : 'Add Brand'}</button>
+          {editingBrand && <button onClick={() => { setEditingBrand(null); setForm({ id: '', name: '', tagline: '', logo: '' }); }} className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancel</button>}
+        </div>
+      </div>
+
+      <h3 className="text-xl font-bold mb-4">All Brands ({brands.length})</h3>
+      <div className="space-y-3">
+        {brands.map(b => (
+          <div key={b.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                {b.image_url ? (
+                  <img src={b.image_url} alt={b.name} className="w-16 h-16 object-contain rounded-lg bg-white p-1" />
+                ) : (
+                  <div className="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center text-lg font-bold text-red-500">{b.logo}</div>
+                )}
+                <div>
+                  <div className="font-bold">{b.name}</div>
+                  <div className="text-sm text-gray-400">{b.tagline}</div>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button onClick={() => setEditingBrand(b)} className="px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700">Edit</button>
+                <button onClick={() => deleteBrand(b.id)} className="px-4 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm hover:bg-red-900/50">Delete</button>
+              </div>
+            </div>
+            {/* Brand Image Upload */}
+            <div className="mt-3 pt-3 border-t border-gray-800">
+              <label className="block text-xs text-gray-500 mb-2">Brand Image {b.image_url ? '(click to replace)' : '(upload an image for homepage display)'}</label>
+              <label className="inline-block bg-gray-800 border border-dashed border-gray-600 rounded-lg px-4 py-2 text-sm cursor-pointer hover:border-red-600 transition-colors">
+                <input type="file" accept="image/*" onChange={e => uploadBrandImage(e, b.id)} className="hidden" />
+                {uploading ? 'Uploading...' : b.image_url ? 'Replace Image' : 'Upload Brand Image'}
+              </label>
+            </div>
+          </div>
+        ))}
+        {brands.length === 0 && <p className="text-gray-500 text-center py-8">No brands yet. Add your first brand above.</p>}
+      </div>
     </div>
   );
 }
 
-function ProductDetailPage({ navigate, brands, product, brandId }) {
-  const [imgIdx, setImgIdx] = useState(0);
-  const [tab, setTab] = useState('overview');
+function ProductsTab({ brands, products, fetchProducts, editingProduct, setEditingProduct, showMsg }) {
+  const [form, setForm] = useState({ brand_id: '', model: '', name: '', description: '', full_description: '', category: '', video_url: '' });
+  const [specs, setSpecs] = useState([{ spec_name: '', spec_value: '' }]);
+  const [features, setFeatures] = useState(['']);
+  const [filterBrand, setFilterBrand] = useState('all');
 
-  const bInfo = brands.find(b => b.id === (product?.brand_id || brandId));
-  if (!product) return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading...</p></div>;
+  useEffect(() => {
+    if (editingProduct) {
+      setForm({ brand_id: editingProduct.brand_id || '', model: editingProduct.model || '', name: editingProduct.name || '', description: editingProduct.description || '', full_description: editingProduct.full_description || '', category: editingProduct.category || '', video_url: editingProduct.video_url || '' });
+      setSpecs(editingProduct.product_specs?.length > 0 ? editingProduct.product_specs.map(s => ({ spec_name: s.spec_name, spec_value: s.spec_value })) : [{ spec_name: '', spec_value: '' }]);
+      setFeatures(editingProduct.product_features?.length > 0 ? editingProduct.product_features.sort((a,b) => a.sort_order - b.sort_order).map(f => f.feature) : ['']);
+    } else {
+      setForm({ brand_id: '', model: '', name: '', description: '', full_description: '', category: '', video_url: '' });
+      setSpecs([{ spec_name: '', spec_value: '' }]);
+      setFeatures(['']);
+    }
+  }, [editingProduct]);
 
-  const images = (product.product_images || []).sort((a,b) => a.sort_order - b.sort_order);
-  const specs = product.product_specs || [];
-  const features = (product.product_features || []).sort((a,b) => a.sort_order - b.sort_order);
-  const docs = product.product_documents || [];
+  const saveProduct = async () => {
+    if (!form.brand_id || !form.model || !form.name) return showMsg('Brand, Model, and Name are required');
+    let productId;
+    if (editingProduct) {
+      await supabase.from('products').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editingProduct.id);
+      productId = editingProduct.id;
+      await supabase.from('product_specs').delete().eq('product_id', productId);
+      await supabase.from('product_features').delete().eq('product_id', productId);
+      showMsg('Product updated!');
+    } else {
+      const { data } = await supabase.from('products').insert([form]).select();
+      productId = data[0].id;
+      showMsg('Product added!');
+    }
+    const validSpecs = specs.filter(s => s.spec_name && s.spec_value);
+    if (validSpecs.length > 0) await supabase.from('product_specs').insert(validSpecs.map(s => ({ product_id: productId, ...s })));
+    const validFeatures = features.filter(f => f.trim());
+    if (validFeatures.length > 0) await supabase.from('product_features').insert(validFeatures.map((f, i) => ({ product_id: productId, feature: f, sort_order: i })));
+    setEditingProduct(null);
+    fetchProducts();
+  };
+
+  const deleteProduct = async (id) => {
+    if (!confirm('Delete this product and all its data?')) return;
+    await supabase.from('product_specs').delete().eq('product_id', id);
+    await supabase.from('product_features').delete().eq('product_id', id);
+    await supabase.from('product_images').delete().eq('product_id', id);
+    await supabase.from('product_documents').delete().eq('product_id', id);
+    await supabase.from('products').delete().eq('id', id);
+    showMsg('Product deleted');
+    fetchProducts();
+  };
+
+  const filtered = filterBrand === 'all' ? products : products.filter(p => p.brand_id === filterBrand);
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="bg-gray-800 border-b border-gray-700"><div className="max-w-7xl mx-auto px-4 py-4"><button onClick={() => navigate('products', { brand: product.brand_id })} className="flex items-center text-gray-400 hover:text-red-500"><ArrowLeft size={20} className="mr-2" />Back to Products</button></div></div>
-
-      <section className="py-12"><div className="max-w-7xl mx-auto px-4"><div className="grid lg:grid-cols-2 gap-12">
-        <div>
-          <div className="bg-white border border-gray-700 rounded-2xl overflow-hidden mb-4 h-96 flex items-center justify-center p-6">
-            {images.length > 0 ? <img src={images[imgIdx]?.image_url} alt={images[imgIdx]?.alt_text} className="max-w-full max-h-full object-contain" /> : <div className="text-center"><div className="text-7xl font-bold text-gray-300 mb-4">{bInfo?.logo}</div><p className="text-gray-400">No images uploaded yet</p></div>}
-          </div>
-          {images.length > 1 && <div className="grid grid-cols-3 gap-3">{images.map((img, i) => <button key={img.id} onClick={() => setImgIdx(i)} className={`rounded-lg overflow-hidden h-24 border-2 bg-white flex items-center justify-center p-2 ${imgIdx === i ? 'border-red-600' : 'border-gray-700'}`}><img src={img.image_url} alt={img.alt_text} className="max-w-full max-h-full object-contain" /></button>)}</div>}
+    <div>
+      <h2 className="text-2xl font-bold mb-6">{editingProduct ? `Edit: ${editingProduct.name}` : 'Add New Product'}</h2>
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div><label className="block text-sm text-gray-400 mb-1">Brand *</label><select value={form.brand_id} onChange={e => setForm({...form, brand_id: e.target.value})} className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white"><option value="">Select brand...</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+          <div><label className="block text-sm text-gray-400 mb-1">Model Number *</label><input value={form.model} onChange={e => setForm({...form, model: e.target.value})} placeholder="e.g. Z14" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          <div><label className="block text-sm text-gray-400 mb-1">Product Name *</label><input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. Z14 Self-Service Juicer" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          <div><label className="block text-sm text-gray-400 mb-1">Category</label><input value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="e.g. Juicers" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          <div className="col-span-2"><label className="block text-sm text-gray-400 mb-1">Short Description</label><input value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Brief one-liner..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          <div className="col-span-2"><label className="block text-sm text-gray-400 mb-1">Full Description</label><textarea value={form.full_description} onChange={e => setForm({...form, full_description: e.target.value})} rows={4} placeholder="Detailed product description..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          <div className="col-span-2"><label className="block text-sm text-gray-400 mb-1">Video URL (YouTube embed)</label><input value={form.video_url} onChange={e => setForm({...form, video_url: e.target.value})} placeholder="https://www.youtube.com/embed/..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
         </div>
-
-        <div>
-          <div className="text-sm text-gray-500 mb-1">{bInfo?.name}</div>
-          <div className="inline-block bg-red-900/30 text-red-500 px-4 py-1 rounded-full text-sm font-semibold mb-4">{product.category}</div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">{product.name}</h1>
-          <p className="text-xl text-gray-400 mb-6">{product.description}</p>
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 mb-6"><div className="text-sm text-gray-500 mb-1">Model Number</div><div className="text-2xl font-bold font-mono">{product.model}</div></div>
-          {specs.length > 0 && <div className="bg-black rounded-2xl p-6 mb-6 border border-gray-800"><h3 className="font-bold text-lg mb-4">Quick Specifications</h3><div className="grid grid-cols-2 gap-4">{specs.slice(0,4).map(s => <div key={s.id}><div className="text-gray-500 text-sm mb-1">{s.spec_name}</div><div className="font-semibold">{s.spec_value}</div></div>)}</div></div>}
-          <div className="flex flex-col sm:flex-row gap-4"><button className="flex-1 bg-red-600 text-white px-8 py-4 rounded-full font-semibold hover:bg-red-700">Request Quote</button><button onClick={() => navigate('demo')} className="flex-1 bg-gray-800 border border-gray-700 text-white px-8 py-4 rounded-full font-semibold hover:border-red-600">Book Demo</button></div>
+        <div className="mb-4"><label className="block text-sm text-gray-400 mb-2">Specifications</label>{specs.map((s, i) => (<div key={i} className="flex space-x-2 mb-2"><input value={s.spec_name} onChange={e => { const n = [...specs]; n[i].spec_name = e.target.value; setSpecs(n); }} placeholder="e.g. Dimensions" className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm" /><input value={s.spec_value} onChange={e => { const n = [...specs]; n[i].spec_value = e.target.value; setSpecs(n); }} placeholder='e.g. 17.9"W x 18.7"D' className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm" /><button onClick={() => setSpecs(specs.filter((_, j) => j !== i))} className="px-3 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm">&times;</button></div>))}<button onClick={() => setSpecs([...specs, { spec_name: '', spec_value: '' }])} className="text-sm text-red-500 hover:underline">+ Add Specification</button></div>
+        <div className="mb-4"><label className="block text-sm text-gray-400 mb-2">Features</label>{features.map((f, i) => (<div key={i} className="flex space-x-2 mb-2"><input value={f} onChange={e => { const n = [...features]; n[i] = e.target.value; setFeatures(n); }} placeholder="e.g. Self-service one-button operation" className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm" /><button onClick={() => setFeatures(features.filter((_, j) => j !== i))} className="px-3 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm">&times;</button></div>))}<button onClick={() => setFeatures([...features, ''])} className="text-sm text-red-500 hover:underline">+ Add Feature</button></div>
+        <div className="flex space-x-3">
+          <button onClick={saveProduct} className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700">{editingProduct ? 'Update Product' : 'Add Product'}</button>
+          {editingProduct && <button onClick={() => setEditingProduct(null)} className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancel</button>}
         </div>
-      </div></div></section>
+      </div>
 
-      <section className="py-12 bg-gray-800 border-t border-gray-700"><div className="max-w-7xl mx-auto px-4">
-        <div className="border-b border-gray-700 mb-8"><div className="flex space-x-8 overflow-x-auto">{['overview','specifications','features','documents'].map(t => <button key={t} onClick={() => setTab(t)} className={`pb-4 font-semibold capitalize whitespace-nowrap ${tab === t ? 'border-b-2 border-red-600 text-red-500' : 'text-gray-500 hover:text-gray-300'}`}>{t}</button>)}</div></div>
-        <div className="min-h-64">
-          {tab === 'overview' && (
-            <div className="grid lg:grid-cols-2 gap-12">
-              <div>
-                <h2 className="text-3xl font-bold mb-6">Product Overview</h2>
-                <p className="text-lg text-gray-300 leading-relaxed mb-8">{product.full_description}</p>
-                {product.video_url && <div><h3 className="text-2xl font-bold mb-4">Product Video</h3><div className="rounded-2xl overflow-hidden aspect-video"><iframe src={product.video_url} className="w-full h-full" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe></div></div>}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xl font-bold">All Products ({filtered.length})</h3>
+        <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)} className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"><option value="all">All Brands</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+      </div>
+      <div className="space-y-3">
+        {filtered.map(p => {
+          const b = brands.find(br => br.id === p.brand_id);
+          return (
+            <div key={p.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center text-lg font-bold text-red-500">{b?.logo}</div>
+                <div><div className="font-bold">{p.name}</div><div className="text-sm text-gray-400">{b?.name} &bull; {p.model} &bull; {p.category}</div><div className="text-xs text-gray-500">{p.product_images?.length || 0} images &bull; {p.product_documents?.length || 0} documents</div></div>
               </div>
-              <div>{features.length > 0 && <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8"><h3 className="text-2xl font-bold mb-6">Key Features</h3><ul className="space-y-4">{features.map(f => <li key={f.id} className="flex items-start"><div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-0.5"><ChevronRight size={14} className="text-white" /></div><span className="text-gray-300">{f.feature}</span></li>)}</ul></div>}</div>
+              <div className="flex space-x-2">
+                <button onClick={() => setEditingProduct(p)} className="px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700">Edit</button>
+                <button onClick={() => deleteProduct(p.id)} className="px-4 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm hover:bg-red-900/50">Delete</button>
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <p className="text-gray-500 text-center py-8">No products yet.</p>}
+      </div>
+    </div>
+  );
+}
+
+function ImagesTab({ products, fetchProducts, showMsg }) {
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [docUploading, setDocUploading] = useState(false);
+  const [docName, setDocName] = useState('');
+
+  const uploadImage = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !selectedProduct) return;
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `images/${selectedProduct.id}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-assets').upload(fileName, file);
+    if (error) { showMsg('Upload failed: ' + error.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('product-assets').getPublicUrl(fileName);
+    await supabase.from('product_images').insert([{ product_id: selectedProduct.id, image_url: publicUrl, alt_text: file.name, sort_order: selectedProduct.product_images?.length || 0 }]);
+    showMsg('Image uploaded!');
+    setUploading(false);
+    fetchProducts();
+  };
+
+  const uploadDocument = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !selectedProduct) return;
+    setDocUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `documents/${selectedProduct.id}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-assets').upload(fileName, file);
+    if (error) { showMsg('Upload failed: ' + error.message); setDocUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('product-assets').getPublicUrl(fileName);
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    await supabase.from('product_documents').insert([{ product_id: selectedProduct.id, name: docName || file.name, file_url: publicUrl, file_type: ext.toUpperCase(), file_size: `${sizeMB} MB` }]);
+    showMsg('Document uploaded!');
+    setDocUploading(false);
+    setDocName('');
+    fetchProducts();
+  };
+
+  const deleteImage = async (imgId) => {
+    await supabase.from('product_images').delete().eq('id', imgId);
+    showMsg('Image deleted');
+    fetchProducts();
+  };
+
+  const deleteDocument = async (docId) => {
+    await supabase.from('product_documents').delete().eq('id', docId);
+    showMsg('Document deleted');
+    fetchProducts();
+  };
+
+  const currentProduct = products.find(p => p.id === selectedProduct?.id);
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6">Manage Images & Documents</h2>
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <label className="block text-sm text-gray-400 mb-2">Select a product</label>
+        <select value={selectedProduct?.id || ''} onChange={e => setSelectedProduct(products.find(p => p.id === e.target.value) || null)} className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white"><option value="">Choose a product...</option>{products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.model})</option>)}</select>
+      </div>
+
+      {currentProduct && (
+        <>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+            <h3 className="text-xl font-bold mb-4">Product Images ({currentProduct.product_images?.length || 0}/3)</h3>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              {(currentProduct.product_images || []).map(img => (
+                <div key={img.id} className="relative bg-white rounded-xl overflow-hidden">
+                  <img src={img.image_url} alt={img.alt_text} className="w-full h-48 object-contain p-2" />
+                  <div className="p-3 bg-gray-900"><p className="text-xs text-gray-400 truncate">{img.alt_text}</p><button onClick={() => deleteImage(img.id)} className="mt-2 text-xs text-red-400 hover:underline">Delete</button></div>
+                </div>
+              ))}
+            </div>
+            {(currentProduct.product_images?.length || 0) < 3 && (
+              <label className="block bg-gray-800 border-2 border-dashed border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:border-red-600">
+                <input type="file" accept="image/*" onChange={uploadImage} className="hidden" />
+                <p className="text-gray-400">{uploading ? 'Uploading...' : 'Click to upload an image'}</p>
+                <p className="text-xs text-gray-500 mt-1">JPG, PNG, WebP — max 5MB</p>
+              </label>
+            )}
+          </div>
+
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+            <h3 className="text-xl font-bold mb-4">Documents ({currentProduct.product_documents?.length || 0})</h3>
+            <div className="space-y-3 mb-4">
+              {(currentProduct.product_documents || []).map(doc => (
+                <div key={doc.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex items-center justify-between">
+                  <div><div className="font-semibold">{doc.name}</div><div className="text-sm text-gray-400">{doc.file_type} &bull; {doc.file_size}</div></div>
+                  <div className="flex space-x-2"><a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-gray-700 rounded-lg text-sm hover:bg-gray-600">View</a><button onClick={() => deleteDocument(doc.id)} className="px-4 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm hover:bg-red-900/50">Delete</button></div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3">
+              <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name (e.g. Specification Sheet)" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+              <label className="block bg-gray-800 border-2 border-dashed border-gray-600 rounded-xl p-6 text-center cursor-pointer hover:border-red-600">
+                <input type="file" accept=".pdf,.doc,.docx" onChange={uploadDocument} className="hidden" />
+                <p className="text-gray-400">{docUploading ? 'Uploading...' : 'Click to upload a document'}</p>
+              </label>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ImportTab({ brands, fetchProducts, showMsg }) {
+  const [csvData, setCsvData] = useState('');
+  const [parsed, setParsed] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [importType, setImportType] = useState('products');
+  const [results, setResults] = useState(null);
+
+  const parseCSV = (text) => {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    return lines.slice(1).map(line => {
+      const values = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') { inQuotes = !inQuotes; }
+        else if (line[i] === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+        else { current += line[i]; }
+      }
+      values.push(current.trim());
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = values[i] || ''; });
+      return obj;
+    });
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      setCsvData(text);
+      const rows = parseCSV(text);
+      setParsed(rows);
+      setResults(null);
+    };
+    reader.readAsText(file);
+  };
+
+  const handlePaste = (text) => {
+    setCsvData(text);
+    const rows = parseCSV(text);
+    setParsed(rows);
+    setResults(null);
+  };
+
+  const importProducts = async () => {
+    if (parsed.length === 0) return showMsg('No data to import');
+    setImporting(true);
+    let success = 0;
+    let errors = 0;
+    const errorDetails = [];
+
+    for (const row of parsed) {
+      try {
+        if (!row.brand_id || !row.model || !row.name) {
+          errors++;
+          errorDetails.push(`Skipped: missing brand_id, model, or name - ${row.model || 'unknown'}`);
+          continue;
+        }
+
+        // Check if brand exists
+        const brandExists = brands.find(b => b.id === row.brand_id);
+        if (!brandExists) {
+          errors++;
+          errorDetails.push(`Skipped: brand "${row.brand_id}" not found - ${row.model}`);
+          continue;
+        }
+
+        // Insert product
+        const productData = {
+          brand_id: row.brand_id,
+          model: row.model,
+          name: row.name,
+          description: row.description || '',
+          full_description: row.full_description || '',
+          category: row.category || '',
+          video_url: row.video_url || ''
+        };
+
+        const { data: product, error: prodError } = await supabase.from('products').insert([productData]).select();
+        if (prodError) { errors++; errorDetails.push(`Error inserting ${row.model}: ${prodError.message}`); continue; }
+
+        const productId = product[0].id;
+
+        // Insert specs if columns exist (spec_1_name, spec_1_value, spec_2_name, spec_2_value, etc.)
+        const specsToInsert = [];
+        for (let i = 1; i <= 10; i++) {
+          const sName = row[`spec_${i}_name`];
+          const sValue = row[`spec_${i}_value`];
+          if (sName && sValue) specsToInsert.push({ product_id: productId, spec_name: sName, spec_value: sValue });
+        }
+        if (specsToInsert.length > 0) await supabase.from('product_specs').insert(specsToInsert);
+
+        // Insert features if columns exist (feature_1, feature_2, etc.)
+        const featuresToInsert = [];
+        for (let i = 1; i <= 10; i++) {
+          const feat = row[`feature_${i}`];
+          if (feat) featuresToInsert.push({ product_id: productId, feature: feat, sort_order: i - 1 });
+        }
+        if (featuresToInsert.length > 0) await supabase.from('product_features').insert(featuresToInsert);
+
+        success++;
+      } catch (err) {
+        errors++;
+        errorDetails.push(`Error: ${row.model || 'unknown'} - ${err.message}`);
+      }
+    }
+
+    setResults({ success, errors, errorDetails });
+    setImporting(false);
+    fetchProducts();
+    showMsg(`Imported ${success} products!`);
+  };
+
+  const importBrands = async () => {
+    if (parsed.length === 0) return showMsg('No data to import');
+    setImporting(true);
+    let success = 0;
+    let errors = 0;
+    const errorDetails = [];
+
+    for (const row of parsed) {
+      try {
+        if (!row.id || !row.name) { errors++; errorDetails.push(`Skipped: missing id or name`); continue; }
+        const { error } = await supabase.from('brands').insert([{ id: row.id, name: row.name, tagline: row.tagline || '', logo: row.logo || '' }]);
+        if (error) { errors++; errorDetails.push(`Error: ${row.id} - ${error.message}`); continue; }
+        success++;
+      } catch (err) { errors++; errorDetails.push(`Error: ${row.id || 'unknown'} - ${err.message}`); }
+    }
+
+    setResults({ success, errors, errorDetails });
+    setImporting(false);
+    showMsg(`Imported ${success} brands!`);
+  };
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6">CSV Import</h2>
+
+      {/* Import Type */}
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <label className="block text-sm text-gray-400 mb-2">What are you importing?</label>
+        <div className="flex space-x-3 mb-6">
+          <button onClick={() => { setImportType('products'); setParsed([]); setCsvData(''); setResults(null); }} className={`px-5 py-2.5 rounded-full font-medium ${importType === 'products' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>Products</button>
+          <button onClick={() => { setImportType('brands'); setParsed([]); setCsvData(''); setResults(null); }} className={`px-5 py-2.5 rounded-full font-medium ${importType === 'brands' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>Brands</button>
+        </div>
+
+        {/* Template */}
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-6">
+          <h3 className="font-bold mb-2">CSV Format for {importType === 'products' ? 'Products' : 'Brands'}</h3>
+          {importType === 'products' ? (
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Required columns: <span className="text-red-400">brand_id, model, name</span></p>
+              <p className="text-sm text-gray-400 mb-2">Optional columns: description, full_description, category, video_url</p>
+              <p className="text-sm text-gray-400 mb-2">Optional specs: spec_1_name, spec_1_value, spec_2_name, spec_2_value (up to 10)</p>
+              <p className="text-sm text-gray-400 mb-3">Optional features: feature_1, feature_2, feature_3 (up to 10)</p>
+              <div className="bg-gray-900 rounded-lg p-3 text-xs font-mono text-gray-300 overflow-x-auto">
+                brand_id,model,name,description,category,spec_1_name,spec_1_value,spec_2_name,spec_2_value,feature_1,feature_2<br/>
+                zummo,Z14,Z14 Self-Service Juicer,Self-Service Commercial Juicer,Juicers,Dimensions,17.9"W x 18.7"D x 30.5"H,Production,22 fruits/minute,Self-service one-button operation,NSF certified
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Required columns: <span className="text-red-400">id, name</span></p>
+              <p className="text-sm text-gray-400 mb-3">Optional columns: tagline, logo</p>
+              <div className="bg-gray-900 rounded-lg p-3 text-xs font-mono text-gray-300 overflow-x-auto">
+                id,name,tagline,logo<br/>
+                zummo,Zummo,Citrus Juicing Systems,ZM
+              </div>
             </div>
           )}
-          {tab === 'specifications' && <div><h2 className="text-3xl font-bold mb-6">Technical Specifications</h2>{specs.length > 0 ? <div className="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">{specs.map((s, i) => <div key={s.id} className={`grid grid-cols-2 p-5 ${i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-800/50'}`}><div className="font-semibold text-gray-400">{s.spec_name}</div><div>{s.spec_value}</div></div>)}</div> : <p className="text-gray-500">No specifications added yet.</p>}</div>}
-          {tab === 'features' && <div><h2 className="text-3xl font-bold mb-6">Features & Benefits</h2>{features.length > 0 ? <div className="grid md:grid-cols-2 gap-6">{features.map((f, i) => <div key={f.id} className="bg-gray-900 border border-gray-700 rounded-xl p-6 hover:border-red-600"><div className="flex items-start"><div className="w-10 h-10 bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0 mr-4"><span className="text-red-500 font-bold">{i+1}</span></div><p className="text-gray-300 mt-2">{f.feature}</p></div></div>)}</div> : <p className="text-gray-500">No features listed yet.</p>}</div>}
-          {tab === 'documents' && <div><h2 className="text-3xl font-bold mb-6">Downloads</h2>{docs.length > 0 ? <div className="grid md:grid-cols-3 gap-6">{docs.map(d => <div key={d.id} className="bg-gray-900 border border-gray-700 rounded-xl p-6 hover:border-red-600 group"><div className="flex items-start justify-between mb-4"><FileText size={36} className="text-red-500" /><Download size={20} className="text-gray-600 group-hover:text-red-500" /></div><h3 className="font-bold text-lg mb-2">{d.name}</h3><div className="flex justify-between text-sm text-gray-500"><span>{d.file_type}</span><span>{d.file_size}</span></div><a href={d.file_url} target="_blank" rel="noopener noreferrer" className="block w-full mt-4 bg-gray-800 border border-gray-700 py-2 rounded-lg text-center hover:bg-red-600 hover:border-red-600">Download</a></div>)}</div> : <div className="text-center py-12 bg-gray-800 rounded-2xl border border-gray-700"><FileText size={64} className="mx-auto text-gray-600 mb-4" /><p className="text-gray-500">No documents uploaded yet.</p></div>}</div>}
         </div>
-      </div></section>
-    </div>
-  );
-}
 
-function AboutPage() { return <div className="min-h-screen bg-gray-900"><section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">About GBS Foodservice Equipment Inc</h1><p className="text-xl text-gray-400">Your trusted partner in foodservice equipment</p></div></section><section className="py-20"><div className="max-w-4xl mx-auto px-4"><div className="bg-gray-800 border border-gray-700 rounded-2xl p-12"><h2 className="text-3xl font-bold mb-6">Who We Are</h2><p className="text-gray-300 mb-6 text-lg leading-relaxed">GBS Foodservice Equipment Inc is a leading supplier of professional foodservice equipment across Canada.</p><h2 className="text-3xl font-bold mb-6 mt-12">Our Mission</h2><p className="text-gray-300 text-lg leading-relaxed">We partner with the world's most trusted manufacturers to deliver reliable, high-performance equipment coast to coast.</p><div className="bg-red-900/20 border-l-4 border-red-600 p-6 rounded-r-xl mt-8"><h3 className="font-bold text-xl mb-4">Contact</h3><div className="flex items-center space-x-3 text-gray-300"><Mail className="text-red-500" size={20} /><span>info@gbscooks.com</span></div></div></div></div></section></div>; }
+        {/* Upload */}
+        <div className="space-y-4">
+          <label className="block bg-gray-800 border-2 border-dashed border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:border-red-600 transition-colors">
+            <input type="file" accept=".csv,.txt" onChange={handleFileUpload} className="hidden" />
+            <p className="text-gray-400 text-lg mb-1">Click to upload a CSV file</p>
+            <p className="text-xs text-gray-500">.csv or .txt file</p>
+          </label>
 
-function ServicePage() { return <div className="min-h-screen bg-gray-900"><section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">Service & Support</h1><p className="text-xl text-gray-400">Unrivalled service across Canada</p></div></section><section className="py-20"><div className="max-w-7xl mx-auto px-4 grid md:grid-cols-3 gap-8">{[{i:<Wrench className="text-red-500" size={48}/>,t:'Installation',d:'Professional installation from day one.'},{i:<Wrench className="text-red-500" size={48}/>,t:'Maintenance',d:'Regular maintenance for peak performance.'},{i:<Phone className="text-red-500" size={48}/>,t:'24/7 Support',d:'Round-the-clock support ensuring minimal downtime.'}].map((s,idx) => <div key={idx} className="bg-gray-800 border border-gray-700 p-8 rounded-2xl">{s.i}<h3 className="text-2xl font-bold mb-4 mt-6">{s.t}</h3><p className="text-gray-400">{s.d}</p></div>)}</div></section></div>; }
+          <div className="text-center text-gray-500">— or paste CSV data below —</div>
 
-function BlogPage({ blogPosts }) {
-  return (
-    <div className="min-h-screen bg-gray-900">
-      <section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">The Drop</h1><p className="text-xl text-gray-400">Insights, trends, and tips from foodservice</p></div></section>
-      <section className="py-12"><div className="max-w-7xl mx-auto px-4">
-        {blogPosts.length > 0 ? (
-          <div className="grid md:grid-cols-3 gap-8">
-            {blogPosts.map(p => (
-              <div key={p.id} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden hover:border-red-600">
-                {p.image_url ? <img src={p.image_url} alt={p.title} className="w-full h-56 object-cover border-b border-gray-700" /> : <div className="bg-gradient-to-br from-gray-700 to-gray-900 h-56 flex items-center justify-center border-b border-gray-700"><ImageIcon size={64} className="text-gray-600" /></div>}
-                <div className="p-6"><div className="text-sm text-red-500 font-semibold mb-2">{p.category}</div><h3 className="text-2xl font-bold mb-3">{p.title}</h3><p className="text-gray-400 mb-4">{p.excerpt}</p><span className="text-sm text-gray-500">{p.published_at ? new Date(p.published_at).toLocaleDateString() : ''}</span></div>
-              </div>
-            ))}
+          <textarea
+            value={csvData}
+            onChange={e => handlePaste(e.target.value)}
+            rows={8}
+            placeholder="Paste your CSV data here..."
+            className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+        </div>
+      </div>
+
+      {/* Preview */}
+      {parsed.length > 0 && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+          <h3 className="text-xl font-bold mb-4">Preview ({parsed.length} rows)</h3>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  {Object.keys(parsed[0]).slice(0, 8).map(h => (
+                    <th key={h} className="text-left py-2 px-3 text-gray-400 font-semibold whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {parsed.slice(0, 20).map((row, i) => (
+                  <tr key={i} className="border-b border-gray-800">
+                    {Object.values(row).slice(0, 8).map((v, j) => (
+                      <td key={j} className="py-2 px-3 text-gray-300 whitespace-nowrap max-w-48 truncate">{v}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {parsed.length > 20 && <p className="text-sm text-gray-500 mt-2">...and {parsed.length - 20} more rows</p>}
           </div>
-        ) : (
-          <p className="text-center text-gray-500 py-20">No blog posts yet. Add them in the admin panel.</p>
-        )}
-      </div></section>
+
+          <button
+            onClick={importType === 'products' ? importProducts : importBrands}
+            disabled={importing}
+            className="mt-6 bg-red-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50"
+          >
+            {importing ? 'Importing...' : `Import ${parsed.length} ${importType}`}
+          </button>
+        </div>
+      )}
+
+      {/* Results */}
+      {results && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+          <h3 className="text-xl font-bold mb-4">Import Results</h3>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-green-900/20 border border-green-800 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-green-400">{results.success}</div>
+              <div className="text-sm text-green-400">Successful</div>
+            </div>
+            <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-red-400">{results.errors}</div>
+              <div className="text-sm text-red-400">Errors</div>
+            </div>
+          </div>
+          {results.errorDetails.length > 0 && (
+            <div className="bg-gray-800 rounded-lg p-4 max-h-48 overflow-y-auto">
+              <h4 className="font-semibold text-red-400 mb-2">Error Details:</h4>
+              {results.errorDetails.map((e, i) => (
+                <p key={i} className="text-sm text-gray-400 mb-1">{e}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function DemoPage() { const [fd, setFd] = useState({ name:'', email:'', phone:'', company:'', equipment:'', message:'' }); return <div className="min-h-screen bg-gray-900"><section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">Book a Demo</h1><p className="text-xl text-gray-400">See our equipment in action</p></div></section><section className="py-12"><div className="max-w-3xl mx-auto px-4"><div className="bg-gray-800 border border-gray-700 rounded-2xl p-8 md:p-12"><form onSubmit={e => { e.preventDefault(); alert('Demo request submitted!'); }} className="space-y-6"><div className="grid md:grid-cols-2 gap-6">{[{l:'Name *',k:'name',t:'text',p:'Your name'},{l:'Email *',k:'email',t:'email',p:'your@email.com'}].map(f => <div key={f.k}><label className="block text-sm font-semibold text-gray-300 mb-2">{f.l}</label><input type={f.t} required value={fd[f.k]} onChange={e => setFd({...fd,[f.k]:e.target.value})} className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-white" placeholder={f.p} /></div>)}</div><div className="grid md:grid-cols-2 gap-6">{[{l:'Phone *',k:'phone',p:'(123) 456-7890'},{l:'Company',k:'company',p:'Company name'}].map(f => <div key={f.k}><label className="block text-sm font-semibold text-gray-300 mb-2">{f.l}</label><input type="text" value={fd[f.k]} onChange={e => setFd({...fd,[f.k]:e.target.value})} className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-white" placeholder={f.p} /></div>)}</div><div><label className="block text-sm font-semibold text-gray-300 mb-2">Equipment Interest</label><select value={fd.equipment} onChange={e => setFd({...fd,equipment:e.target.value})} className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-white"><option value="">Select...</option><option>Cooking Equipment</option><option>Refrigeration</option><option>Food Preparation</option><option>Beverage</option><option>Warewashing</option><option>Other</option></select></div><div><label className="block text-sm font-semibold text-gray-300 mb-2">Message</label><textarea value={fd.message} onChange={e => setFd({...fd,message:e.target.value})} rows={4} className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-white" placeholder="Tell us about your needs..." /></div><button type="submit" className="w-full bg-red-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-red-700">Submit Demo Request</button></form></div></div></section></div>; }
+function BlogTab({ showMsg }) {
+  const [posts, setPosts] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ title: '', excerpt: '', content: '', category: '', published: false });
 
-export default App;
+  useEffect(() => { fetchPosts(); }, []);
+  const fetchPosts = async () => { const { data } = await supabase.from('blog_posts').select('*').order('created_at', { ascending: false }); setPosts(data || []); };
+
+  useEffect(() => {
+    if (editing) setForm({ title: editing.title || '', excerpt: editing.excerpt || '', content: editing.content || '', category: editing.category || '', published: editing.published || false });
+    else setForm({ title: '', excerpt: '', content: '', category: '', published: false });
+  }, [editing]);
+
+  const savePost = async () => {
+    if (!form.title) return showMsg('Title is required');
+    if (editing) { await supabase.from('blog_posts').update({ ...form, published_at: form.published ? new Date().toISOString() : null }).eq('id', editing.id); showMsg('Post updated!'); }
+    else { await supabase.from('blog_posts').insert([{ ...form, published_at: form.published ? new Date().toISOString() : null }]); showMsg('Post created!'); }
+    setEditing(null); fetchPosts();
+  };
+
+  const deletePost = async (id) => { if (!confirm('Delete this post?')) return; await supabase.from('blog_posts').delete().eq('id', id); showMsg('Post deleted'); fetchPosts(); };
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6">{editing ? 'Edit Post' : 'New Blog Post'}</h2>
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm text-gray-400 mb-1">Title *</label><input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Post title" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div><div><label className="block text-sm text-gray-400 mb-1">Category</label><input value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="e.g. Maintenance" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div></div>
+          <div><label className="block text-sm text-gray-400 mb-1">Excerpt</label><input value={form.excerpt} onChange={e => setForm({...form, excerpt: e.target.value})} placeholder="Brief summary..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          <div><label className="block text-sm text-gray-400 mb-1">Content</label><textarea value={form.content} onChange={e => setForm({...form, content: e.target.value})} rows={8} placeholder="Full blog post..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" checked={form.published} onChange={e => setForm({...form, published: e.target.checked})} className="rounded" /><span className="text-gray-300">Published</span></label>
+          <div className="flex space-x-3"><button onClick={savePost} className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700">{editing ? 'Update Post' : 'Create Post'}</button>{editing && <button onClick={() => setEditing(null)} className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancel</button>}</div>
+        </div>
+      </div>
+      <h3 className="text-xl font-bold mb-4">All Posts ({posts.length})</h3>
+      <div className="space-y-3">
+        {posts.map(p => (
+          <div key={p.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+            <div><div className="flex items-center space-x-2"><div className="font-bold">{p.title}</div><span className={`px-2 py-0.5 rounded text-xs ${p.published ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'}`}>{p.published ? 'Published' : 'Draft'}</span></div><div className="text-sm text-gray-400">{p.category} &bull; {new Date(p.created_at).toLocaleDateString()}</div></div>
+            <div className="flex space-x-2"><button onClick={() => setEditing(p)} className="px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700">Edit</button><button onClick={() => deletePost(p.id)} className="px-4 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm hover:bg-red-900/50">Delete</button></div>
+          </div>
+        ))}
+        {posts.length === 0 && <p className="text-gray-500 text-center py-8">No blog posts yet.</p>}
+      </div>
+    </div>
+  );
+}
