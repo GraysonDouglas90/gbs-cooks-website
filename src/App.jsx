@@ -29,9 +29,17 @@ const clientLogos = ['Client 1','Client 2','Client 3','Client 4','Client 5','Cli
 
 function getPageFromHash() {
   const hash = window.location.hash.replace('#/', '').replace('#', '');
-  if (!hash || hash === '/') return 'home';
-  if (hash === 'admin') return 'admin';
-  return hash.split('/')[0] || 'home';
+  if (!hash || hash === '/') return { page: 'home' };
+  if (hash === 'admin') return { page: 'admin' };
+  if (hash.startsWith('product/')) {
+    const parts = hash.split('/');
+    return { page: 'product-detail', brandSlug: parts[1], productSlug: parts[2] };
+  }
+  return { page: hash.split('/')[0] || 'home' };
+}
+
+function slugify(text) {
+  return (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 // Hook to fetch brands from Supabase
@@ -62,13 +70,15 @@ function useBlogPosts() {
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState(getPageFromHash());
+  const [route, setRoute] = useState(getPageFromHash());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navState, setNavState] = useState({});
   const [scrolled, setScrolled] = useState(false);
   const brands = useBrands();
   const allProducts = useProducts();
   const blogPosts = useBlogPosts();
+
+  const currentPage = route.page;
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 50);
@@ -77,17 +87,34 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const h = () => setCurrentPage(getPageFromHash());
+    const h = () => setRoute(getPageFromHash());
     window.addEventListener('hashchange', h);
     return () => window.removeEventListener('hashchange', h);
   }, []);
 
   const navigate = (page, extra = {}) => {
-    setCurrentPage(page);
     setNavState(extra);
     setMobileMenuOpen(false);
-    window.location.hash = page === 'home' ? '/' : `/${page}`;
+    if (page === 'product-detail' && extra.product && extra.brandId) {
+      const brand = brands.find(b => b.id === extra.brandId);
+      const slug = slugify(extra.product.name);
+      const brandSlug = slugify(brand?.name || extra.brandId);
+      window.location.hash = `/product/${brandSlug}/${slug}`;
+    } else {
+      window.location.hash = page === 'home' ? '/' : `/${page}`;
+    }
     window.scrollTo(0, 0);
+  };
+
+  // Find product by slug for direct URL access
+  const findProductBySlug = () => {
+    if (route.brandSlug && route.productSlug && allProducts.length > 0) {
+      return allProducts.find(p => {
+        const brand = brands.find(b => b.id === p.brand_id);
+        return slugify(brand?.name || p.brand_id) === route.brandSlug && slugify(p.name) === route.productSlug;
+      });
+    }
+    return null;
   };
 
   if (currentPage === 'admin') return <Admin />;
@@ -125,7 +152,7 @@ function App() {
       <main className="pt-20">
         {currentPage === 'home' && <HomePage navigate={navigate} brands={brands} blogPosts={blogPosts} />}
         {currentPage === 'products' && <ProductsPage navigate={navigate} brands={brands} allProducts={allProducts} initialBrand={navState.brand} initialCategory={navState.category} />}
-        {currentPage === 'product-detail' && <ProductDetailPage navigate={navigate} brands={brands} productId={navState.productId} brandId={navState.brandId} />}
+        {currentPage === 'product-detail' && <ProductDetailPage navigate={navigate} brands={brands} product={navState.product || findProductBySlug()} brandId={navState.brandId} />}
         {currentPage === 'about' && <AboutPage />}
         {currentPage === 'service' && <ServicePage />}
         {currentPage === 'blog' && <BlogPage blogPosts={blogPosts} />}
@@ -349,7 +376,7 @@ function ProductsPage({ navigate, brands, allProducts, initialBrand, initialCate
               const bInfo = brands.find(b => b.id === p.brand_id);
               const mainImage = p.product_images?.sort((a,b) => a.sort_order - b.sort_order)[0];
               return (
-                <button key={p.id} onClick={() => navigate('product-detail', { productId: p.id, brandId: p.brand_id })} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden hover:border-red-600 transition-all group text-left">
+                <button key={p.id} onClick={() => navigate('product-detail', { product: p, brandId: p.brand_id })} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden hover:border-red-600 transition-all group text-left">
                   {mainImage ? <div className="bg-white h-64 flex items-center justify-center border-b border-gray-700 p-4"><img src={mainImage.image_url} alt={mainImage.alt_text} className="max-w-full max-h-full object-contain" /></div> : <div className="bg-gradient-to-br from-gray-700 to-gray-900 h-64 flex items-center justify-center border-b border-gray-700"><div className="text-5xl font-bold text-gray-600 group-hover:text-red-600 transition-colors">{bInfo?.logo}</div></div>}
                   <div className="p-6">
                     {viewMode !== 'brand' && <div className="text-xs text-gray-500 font-semibold mb-1">{bInfo?.name}</div>}
@@ -370,16 +397,9 @@ function ProductsPage({ navigate, brands, allProducts, initialBrand, initialCate
   );
 }
 
-function ProductDetailPage({ navigate, brands, productId, brandId }) {
-  const [product, setProduct] = useState(null);
+function ProductDetailPage({ navigate, brands, product, brandId }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [tab, setTab] = useState('overview');
-
-  useEffect(() => {
-    if (productId) {
-      supabase.from('products').select('*, product_images(*), product_documents(*), product_specs(*), product_features(*)').eq('id', productId).single().then(({ data }) => setProduct(data));
-    }
-  }, [productId]);
 
   const bInfo = brands.find(b => b.id === (product?.brand_id || brandId));
   if (!product) return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading...</p></div>;
