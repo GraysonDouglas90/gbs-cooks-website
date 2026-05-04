@@ -346,7 +346,7 @@ function ProductsPage({ navigate, brands, allProducts, initialBrand, initialCate
               const mainImage = p.product_images?.sort((a,b) => a.sort_order - b.sort_order)[0];
               return (
                 <button key={p.id} onClick={() => navigate('product-detail', { productId: p.id, brandId: p.brand_id })} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden hover:border-red-600 transition-all group text-left">
-                  {mainImage ? <img src={mainImage.image_url} alt={mainImage.alt_text} className="w-full h-48 object-cover border-b border-gray-700" /> : <div className="bg-gradient-to-br from-gray-700 to-gray-900 h-48 flex items-center justify-center border-b border-gray-700"><div className="text-5xl font-bold text-gray-600 group-hover:text-red-600 transition-colors">{bInfo?.logo}</div></div>}
+                  {mainImage ? <div className="bg-white h-64 flex items-center justify-center border-b border-gray-700 p-4"><img src={mainImage.image_url} alt={mainImage.alt_text} className="max-w-full max-h-full object-contain" /></div> : <div className="bg-gradient-to-br from-gray-700 to-gray-900 h-64 flex items-center justify-center border-b border-gray-700"><div className="text-5xl font-bold text-gray-600 group-hover:text-red-600 transition-colors">{bInfo?.logo}</div></div>}
                   <div className="p-6">
                     {viewMode !== 'brand' && <div className="text-xs text-gray-500 font-semibold mb-1">{bInfo?.name}</div>}
                     <div className="text-sm text-red-500 font-semibold mb-2">{p.category}</div>
@@ -391,10 +391,10 @@ function ProductDetailPage({ navigate, brands, productId, brandId }) {
 
       <section className="py-12"><div className="max-w-7xl mx-auto px-4"><div className="grid lg:grid-cols-2 gap-12">
         <div>
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden mb-4 h-96 flex items-center justify-center">
-            {images.length > 0 ? <img src={images[imgIdx]?.image_url} alt={images[imgIdx]?.alt_text} className="w-full h-full object-contain" /> : <div className="text-center"><div className="text-7xl font-bold text-gray-600 mb-4">{bInfo?.logo}</div><p className="text-gray-500">No images uploaded yet</p></div>}
+          <div className="bg-white border border-gray-700 rounded-2xl overflow-hidden mb-4 h-96 flex items-center justify-center p-6">
+            {images.length > 0 ? <img src={images[imgIdx]?.image_url} alt={images[imgIdx]?.alt_text} className="max-w-full max-h-full object-contain" /> : <div className="text-center"><div className="text-7xl font-bold text-gray-300 mb-4">{bInfo?.logo}</div><p className="text-gray-400">No images uploaded yet</p></div>}
           </div>
-          {images.length > 1 && <div className="grid grid-cols-3 gap-3">{images.map((img, i) => <button key={img.id} onClick={() => setImgIdx(i)} className={`rounded-lg overflow-hidden h-24 border-2 ${imgIdx === i ? 'border-red-600' : 'border-gray-700'}`}><img src={img.image_url} alt={img.alt_text} className="w-full h-full object-cover" /></button>)}</div>}
+          {images.length > 1 && <div className="grid grid-cols-3 gap-3">{images.map((img, i) => <button key={img.id} onClick={() => setImgIdx(i)} className={`rounded-lg overflow-hidden h-24 border-2 bg-white flex items-center justify-center p-2 ${imgIdx === i ? 'border-red-600' : 'border-gray-700'}`}><img src={img.image_url} alt={img.alt_text} className="max-w-full max-h-full object-contain" /></button>)}</div>}
         </div>
 
         <div>
