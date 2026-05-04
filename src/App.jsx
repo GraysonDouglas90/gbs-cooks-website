@@ -123,8 +123,15 @@ const provinces = [
 
 const clientLogos = ['Client 1','Client 2','Client 3','Client 4','Client 5','Client 6','Client 7','Client 8','Client 9','Client 10'];
 
+function getPageFromHash() {
+  const hash = window.location.hash.replace('#/', '').replace('#', '');
+  if (!hash || hash === '/') return 'home';
+  const parts = hash.split('/');
+  return parts[0] || 'home';
+}
+
 function App() {
-  const [currentPage, setCurrentPage] = useState('home');
+  const [currentPage, setCurrentPage] = useState(getPageFromHash());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navState, setNavState] = useState({});
   const [scrolled, setScrolled] = useState(false);
@@ -135,10 +142,19 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentPage(getPageFromHash());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   const navigate = (page, extra = {}) => {
     setCurrentPage(page);
     setNavState(extra);
     setMobileMenuOpen(false);
+    window.location.hash = page === 'home' ? '/' : `/${page}`;
     window.scrollTo(0, 0);
   };
 
