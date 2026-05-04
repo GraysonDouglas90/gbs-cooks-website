@@ -187,7 +187,11 @@ function HomePage({ navigate, brands, blogPosts }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
               {brands.map(b => (
                 <button key={b.id} onClick={() => navigate('products', { brand: b.id })} className="group bg-gray-900 hover:bg-gray-950 border border-gray-700 hover:border-red-600 p-8 rounded-2xl transition-all">
-                  <div className="text-4xl font-bold text-gray-600 group-hover:text-red-600 mb-4 transition-colors">{b.logo}</div>
+                  {b.image_url ? (
+                    <div className="h-24 flex items-center justify-center mb-4"><img src={b.image_url} alt={b.name} className="max-h-full max-w-full object-contain" /></div>
+                  ) : (
+                    <div className="text-4xl font-bold text-gray-600 group-hover:text-red-600 mb-4 transition-colors">{b.logo}</div>
+                  )}
                   <h3 className="text-xl font-bold mb-2">{b.name}</h3>
                   <p className="text-sm text-gray-400 mb-4">{b.tagline}</p>
                   <ChevronRight className="ml-auto text-gray-600 group-hover:text-red-600 transition-colors" />
