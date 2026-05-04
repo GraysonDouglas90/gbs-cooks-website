@@ -160,6 +160,10 @@ function App() {
     window.scrollTo(0, 0);
   };
 
+  if (currentPage === 'admin') {
+    return <Admin />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-gray-900 shadow-lg' : 'bg-transparent'}`}>
@@ -197,7 +201,6 @@ function App() {
       </header>
 
       <main className="pt-20">
-        {currentPage === 'admin' && <Admin />}
         {currentPage === 'home' && <HomePage navigate={navigate} />}
         {currentPage === 'products' && <ProductsPage navigate={navigate} initialBrand={navState.brand} initialCategory={navState.category} />}
         {currentPage === 'product-detail' && <ProductDetailPage navigate={navigate} product={navState.product} brandId={navState.brandId} />}
