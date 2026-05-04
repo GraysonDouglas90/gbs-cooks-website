@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Menu, X, ChevronRight, Phone, Mail, Download, Play, Image as ImageIcon, FileText, ArrowLeft, Calendar, Linkedin, ExternalLink, Wrench, Users, Warehouse, Search, Filter } from 'lucide-react';
+import Admin from './Admin.jsx';
 
 const productData = {
   americanRange: [
@@ -126,6 +127,7 @@ const clientLogos = ['Client 1','Client 2','Client 3','Client 4','Client 5','Cli
 function getPageFromHash() {
   const hash = window.location.hash.replace('#/', '').replace('#', '');
   if (!hash || hash === '/') return 'home';
+  if (hash === 'admin') return 'admin';
   const parts = hash.split('/');
   return parts[0] || 'home';
 }
@@ -195,6 +197,7 @@ function App() {
       </header>
 
       <main className="pt-20">
+        {currentPage === 'admin' && <Admin />}
         {currentPage === 'home' && <HomePage navigate={navigate} />}
         {currentPage === 'products' && <ProductsPage navigate={navigate} initialBrand={navState.brand} initialCategory={navState.category} />}
         {currentPage === 'product-detail' && <ProductDetailPage navigate={navigate} product={navState.product} brandId={navState.brandId} />}
