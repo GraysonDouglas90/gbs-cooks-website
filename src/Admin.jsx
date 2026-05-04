@@ -57,7 +57,7 @@ export default function Admin() {
 
       <div className="bg-gray-900 border-b border-gray-800 px-6">
         <div className="flex space-x-6">
-          {['brands', 'products', 'images', 'blog'].map(t => (
+          {['brands', 'products', 'images', 'import', 'blog'].map(t => (
             <button key={t} onClick={() => { setTab(t); setEditingProduct(null); setEditingBrand(null); }} className={`py-4 font-semibold capitalize border-b-2 transition-colors ${tab === t ? 'border-red-600 text-red-500' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t}</button>
           ))}
         </div>
@@ -67,6 +67,7 @@ export default function Admin() {
         {tab === 'brands' && <BrandsTab brands={brands} fetchBrands={fetchBrands} editingBrand={editingBrand} setEditingBrand={setEditingBrand} showMsg={showMsg} />}
         {tab === 'products' && <ProductsTab brands={brands} products={products} fetchProducts={fetchProducts} editingProduct={editingProduct} setEditingProduct={setEditingProduct} showMsg={showMsg} />}
         {tab === 'images' && <ImagesTab products={products} fetchProducts={fetchProducts} showMsg={showMsg} />}
+        {tab === 'import' && <ImportTab brands={brands} fetchProducts={fetchProducts} showMsg={showMsg} />}
         {tab === 'blog' && <BlogTab showMsg={showMsg} />}
       </div>
     </div>
@@ -383,6 +384,266 @@ function ImagesTab({ products, fetchProducts, showMsg }) {
             </div>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+function ImportTab({ brands, fetchProducts, showMsg }) {
+  const [csvData, setCsvData] = useState('');
+  const [parsed, setParsed] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [importType, setImportType] = useState('products');
+  const [results, setResults] = useState(null);
+
+  const parseCSV = (text) => {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    return lines.slice(1).map(line => {
+      const values = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') { inQuotes = !inQuotes; }
+        else if (line[i] === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+        else { current += line[i]; }
+      }
+      values.push(current.trim());
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = values[i] || ''; });
+      return obj;
+    });
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      setCsvData(text);
+      const rows = parseCSV(text);
+      setParsed(rows);
+      setResults(null);
+    };
+    reader.readAsText(file);
+  };
+
+  const handlePaste = (text) => {
+    setCsvData(text);
+    const rows = parseCSV(text);
+    setParsed(rows);
+    setResults(null);
+  };
+
+  const importProducts = async () => {
+    if (parsed.length === 0) return showMsg('No data to import');
+    setImporting(true);
+    let success = 0;
+    let errors = 0;
+    const errorDetails = [];
+
+    for (const row of parsed) {
+      try {
+        if (!row.brand_id || !row.model || !row.name) {
+          errors++;
+          errorDetails.push(`Skipped: missing brand_id, model, or name - ${row.model || 'unknown'}`);
+          continue;
+        }
+
+        // Check if brand exists
+        const brandExists = brands.find(b => b.id === row.brand_id);
+        if (!brandExists) {
+          errors++;
+          errorDetails.push(`Skipped: brand "${row.brand_id}" not found - ${row.model}`);
+          continue;
+        }
+
+        // Insert product
+        const productData = {
+          brand_id: row.brand_id,
+          model: row.model,
+          name: row.name,
+          description: row.description || '',
+          full_description: row.full_description || '',
+          category: row.category || '',
+          video_url: row.video_url || ''
+        };
+
+        const { data: product, error: prodError } = await supabase.from('products').insert([productData]).select();
+        if (prodError) { errors++; errorDetails.push(`Error inserting ${row.model}: ${prodError.message}`); continue; }
+
+        const productId = product[0].id;
+
+        // Insert specs if columns exist (spec_1_name, spec_1_value, spec_2_name, spec_2_value, etc.)
+        const specsToInsert = [];
+        for (let i = 1; i <= 10; i++) {
+          const sName = row[`spec_${i}_name`];
+          const sValue = row[`spec_${i}_value`];
+          if (sName && sValue) specsToInsert.push({ product_id: productId, spec_name: sName, spec_value: sValue });
+        }
+        if (specsToInsert.length > 0) await supabase.from('product_specs').insert(specsToInsert);
+
+        // Insert features if columns exist (feature_1, feature_2, etc.)
+        const featuresToInsert = [];
+        for (let i = 1; i <= 10; i++) {
+          const feat = row[`feature_${i}`];
+          if (feat) featuresToInsert.push({ product_id: productId, feature: feat, sort_order: i - 1 });
+        }
+        if (featuresToInsert.length > 0) await supabase.from('product_features').insert(featuresToInsert);
+
+        success++;
+      } catch (err) {
+        errors++;
+        errorDetails.push(`Error: ${row.model || 'unknown'} - ${err.message}`);
+      }
+    }
+
+    setResults({ success, errors, errorDetails });
+    setImporting(false);
+    fetchProducts();
+    showMsg(`Imported ${success} products!`);
+  };
+
+  const importBrands = async () => {
+    if (parsed.length === 0) return showMsg('No data to import');
+    setImporting(true);
+    let success = 0;
+    let errors = 0;
+    const errorDetails = [];
+
+    for (const row of parsed) {
+      try {
+        if (!row.id || !row.name) { errors++; errorDetails.push(`Skipped: missing id or name`); continue; }
+        const { error } = await supabase.from('brands').insert([{ id: row.id, name: row.name, tagline: row.tagline || '', logo: row.logo || '' }]);
+        if (error) { errors++; errorDetails.push(`Error: ${row.id} - ${error.message}`); continue; }
+        success++;
+      } catch (err) { errors++; errorDetails.push(`Error: ${row.id || 'unknown'} - ${err.message}`); }
+    }
+
+    setResults({ success, errors, errorDetails });
+    setImporting(false);
+    showMsg(`Imported ${success} brands!`);
+  };
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6">CSV Import</h2>
+
+      {/* Import Type */}
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <label className="block text-sm text-gray-400 mb-2">What are you importing?</label>
+        <div className="flex space-x-3 mb-6">
+          <button onClick={() => { setImportType('products'); setParsed([]); setCsvData(''); setResults(null); }} className={`px-5 py-2.5 rounded-full font-medium ${importType === 'products' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>Products</button>
+          <button onClick={() => { setImportType('brands'); setParsed([]); setCsvData(''); setResults(null); }} className={`px-5 py-2.5 rounded-full font-medium ${importType === 'brands' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>Brands</button>
+        </div>
+
+        {/* Template */}
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-6">
+          <h3 className="font-bold mb-2">CSV Format for {importType === 'products' ? 'Products' : 'Brands'}</h3>
+          {importType === 'products' ? (
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Required columns: <span className="text-red-400">brand_id, model, name</span></p>
+              <p className="text-sm text-gray-400 mb-2">Optional columns: description, full_description, category, video_url</p>
+              <p className="text-sm text-gray-400 mb-2">Optional specs: spec_1_name, spec_1_value, spec_2_name, spec_2_value (up to 10)</p>
+              <p className="text-sm text-gray-400 mb-3">Optional features: feature_1, feature_2, feature_3 (up to 10)</p>
+              <div className="bg-gray-900 rounded-lg p-3 text-xs font-mono text-gray-300 overflow-x-auto">
+                brand_id,model,name,description,category,spec_1_name,spec_1_value,spec_2_name,spec_2_value,feature_1,feature_2<br/>
+                zummo,Z14,Z14 Self-Service Juicer,Self-Service Commercial Juicer,Juicers,Dimensions,17.9"W x 18.7"D x 30.5"H,Production,22 fruits/minute,Self-service one-button operation,NSF certified
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Required columns: <span className="text-red-400">id, name</span></p>
+              <p className="text-sm text-gray-400 mb-3">Optional columns: tagline, logo</p>
+              <div className="bg-gray-900 rounded-lg p-3 text-xs font-mono text-gray-300 overflow-x-auto">
+                id,name,tagline,logo<br/>
+                zummo,Zummo,Citrus Juicing Systems,ZM
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Upload */}
+        <div className="space-y-4">
+          <label className="block bg-gray-800 border-2 border-dashed border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:border-red-600 transition-colors">
+            <input type="file" accept=".csv,.txt" onChange={handleFileUpload} className="hidden" />
+            <p className="text-gray-400 text-lg mb-1">Click to upload a CSV file</p>
+            <p className="text-xs text-gray-500">.csv or .txt file</p>
+          </label>
+
+          <div className="text-center text-gray-500">— or paste CSV data below —</div>
+
+          <textarea
+            value={csvData}
+            onChange={e => handlePaste(e.target.value)}
+            rows={8}
+            placeholder="Paste your CSV data here..."
+            className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+        </div>
+      </div>
+
+      {/* Preview */}
+      {parsed.length > 0 && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+          <h3 className="text-xl font-bold mb-4">Preview ({parsed.length} rows)</h3>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  {Object.keys(parsed[0]).slice(0, 8).map(h => (
+                    <th key={h} className="text-left py-2 px-3 text-gray-400 font-semibold whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {parsed.slice(0, 20).map((row, i) => (
+                  <tr key={i} className="border-b border-gray-800">
+                    {Object.values(row).slice(0, 8).map((v, j) => (
+                      <td key={j} className="py-2 px-3 text-gray-300 whitespace-nowrap max-w-48 truncate">{v}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {parsed.length > 20 && <p className="text-sm text-gray-500 mt-2">...and {parsed.length - 20} more rows</p>}
+          </div>
+
+          <button
+            onClick={importType === 'products' ? importProducts : importBrands}
+            disabled={importing}
+            className="mt-6 bg-red-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50"
+          >
+            {importing ? 'Importing...' : `Import ${parsed.length} ${importType}`}
+          </button>
+        </div>
+      )}
+
+      {/* Results */}
+      {results && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+          <h3 className="text-xl font-bold mb-4">Import Results</h3>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-green-900/20 border border-green-800 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-green-400">{results.success}</div>
+              <div className="text-sm text-green-400">Successful</div>
+            </div>
+            <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-red-400">{results.errors}</div>
+              <div className="text-sm text-red-400">Errors</div>
+            </div>
+          </div>
+          {results.errorDetails.length > 0 && (
+            <div className="bg-gray-800 rounded-lg p-4 max-h-48 overflow-y-auto">
+              <h4 className="font-semibold text-red-400 mb-2">Error Details:</h4>
+              {results.errorDetails.map((e, i) => (
+                <p key={i} className="text-sm text-gray-400 mb-1">{e}</p>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
