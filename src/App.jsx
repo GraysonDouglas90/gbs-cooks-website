@@ -129,7 +129,7 @@ function useBrands() {
 function useProducts() {
   const [products, setProducts] = useState([]);
   useEffect(() => {
-    supabase.from('products').select('*, product_images(*), product_documents(*), product_specs(*), product_features(*)').order('name').then(({ data }) => setProducts(data || []));
+    supabase.from('products').select('*, product_images(*), product_documents(*), product_specs(*), product_features(*)').neq('published', false).order('name').then(({ data }) => setProducts(data || []));
   }, []);
   return products;
 }
