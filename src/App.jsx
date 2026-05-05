@@ -143,6 +143,19 @@ function useBlogPosts() {
   return posts;
 }
 
+// Hook to fetch site settings
+function useSettings() {
+  const [settings, setSettings] = useState({});
+  useEffect(() => {
+    supabase.from('site_settings').select('*').then(({ data }) => {
+      const obj = {};
+      (data || []).forEach(r => { obj[r.key] = r.value; });
+      setSettings(obj);
+    });
+  }, []);
+  return settings;
+}
+
 // Hook to fetch hero slides
 function useHeroSlides() {
   const [slides, setSlides] = useState([]);
@@ -161,6 +174,7 @@ function App() {
   const allProducts = useProducts();
   const blogPosts = useBlogPosts();
   const heroSlides = useHeroSlides();
+  const settings = useSettings();
 
   const currentPage = route.page;
 
@@ -208,7 +222,13 @@ function App() {
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-gray-900 shadow-lg' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            <button onClick={() => navigate('home')} className="text-2xl font-bold tracking-tight"><span className="text-red-600">GBS</span><span className="text-white">COOKS</span></button>
+            <button onClick={() => navigate('home')} className="flex items-center">
+              {settings.logo_url ? (
+                <img src={settings.logo_url} alt={settings.site_name || 'GBS'} style={{ maxHeight: '44px' }} className="object-contain" />
+              ) : (
+                <span className="text-xl font-bold tracking-tight"><span className="text-red-600">GBS</span> <span className="text-white text-sm font-medium">Foodservice Equipment Inc</span></span>
+              )}
+            </button>
             <nav className="hidden md:flex items-center space-x-8">
               <button onClick={() => navigate('home')} className="text-sm font-medium text-gray-300 hover:text-red-500">Home</button>
               <button onClick={() => navigate('products')} className="text-sm font-medium text-gray-300 hover:text-red-500">Products</button>
@@ -237,7 +257,7 @@ function App() {
         {currentPage === 'home' && <HomePage navigate={navigate} brands={brands} blogPosts={blogPosts} heroSlides={heroSlides} />}
         {currentPage === 'products' && <ProductsPage navigate={navigate} brands={brands} allProducts={allProducts} initialBrand={navState.brand} initialCategory={navState.category} />}
         {currentPage === 'product-detail' && <ProductDetailPage navigate={navigate} brands={brands} product={navState.product || findProductBySlug()} brandId={navState.brandId} />}
-        {currentPage === 'about' && <AboutPage />}
+        {currentPage === 'about' && <AboutPage settings={settings} brands={brands} />}
         {currentPage === 'service' && <ServicePage />}
         {currentPage === 'blog' && <BlogPage blogPosts={blogPosts} />}
         {currentPage === 'demo' && <DemoPage />}
@@ -246,12 +266,12 @@ function App() {
       <footer className="bg-black text-white mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid md:grid-cols-4 gap-8">
-            <div><h3 className="text-xl font-bold mb-4">GBS Foodservice Equipment Inc</h3><p className="text-gray-400">Professional foodservice equipment</p></div>
+            <div><h3 className="text-xl font-bold mb-4">{settings.site_name || 'GBS Foodservice Equipment Inc'}</h3><p className="text-gray-400">Professional foodservice equipment</p></div>
             <div><h4 className="font-semibold mb-4">Links</h4><div className="space-y-2">{['home','products','about','service'].map(p => <button key={p} onClick={() => navigate(p)} className="block text-gray-400 hover:text-white capitalize">{p}</button>)}<button onClick={() => navigate('blog')} className="block text-gray-400 hover:text-white">The Drop</button></div></div>
             <div><h4 className="font-semibold mb-4">Resources</h4><button onClick={() => navigate('demo')} className="block text-gray-400 hover:text-white">Book a Demo</button><a href="https://www.linkedin.com/company/gbscooks" target="_blank" rel="noopener noreferrer" className="block text-gray-400 hover:text-white mt-2">LinkedIn</a></div>
-            <div><h4 className="font-semibold mb-4">Contact</h4><div className="flex items-center space-x-2 text-gray-400"><Mail size={16} /><span>info@gbscooks.com</span></div></div>
+            <div><h4 className="font-semibold mb-4">Contact</h4><div className="space-y-2 text-gray-400">{settings.contact_email && <div className="flex items-center space-x-2"><Mail size={16} /><span>{settings.contact_email}</span></div>}{settings.contact_phone && <div className="flex items-center space-x-2"><Phone size={16} /><span>{settings.contact_phone}</span></div>}</div></div>
           </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500 text-sm">&copy; 2024 GBS Foodservice Equipment Inc.</div>
+          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500 text-sm">&copy; {new Date().getFullYear()} {settings.site_name || 'GBS Foodservice Equipment Inc'}. All rights reserved.</div>
         </div>
       </footer>
     </div>
@@ -599,7 +619,147 @@ function ProductDetailPage({ navigate, brands, product, brandId }) {
   );
 }
 
-function AboutPage() { return <div className="min-h-screen bg-gray-900"><section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">About GBS Foodservice Equipment Inc</h1><p className="text-xl text-gray-400">Your trusted partner in foodservice equipment</p></div></section><section className="py-20"><div className="max-w-4xl mx-auto px-4"><div className="bg-gray-800 border border-gray-700 rounded-2xl p-12"><h2 className="text-3xl font-bold mb-6">Who We Are</h2><p className="text-gray-300 mb-6 text-lg leading-relaxed">GBS Foodservice Equipment Inc is a leading supplier of professional foodservice equipment across Canada.</p><h2 className="text-3xl font-bold mb-6 mt-12">Our Mission</h2><p className="text-gray-300 text-lg leading-relaxed">We partner with the world's most trusted manufacturers to deliver reliable, high-performance equipment coast to coast.</p><div className="bg-red-900/20 border-l-4 border-red-600 p-6 rounded-r-xl mt-8"><h3 className="font-bold text-xl mb-4">Contact</h3><div className="flex items-center space-x-3 text-gray-300"><Mail className="text-red-500" size={20} /><span>info@gbscooks.com</span></div></div></div></div></section></div>; }
+function AboutPage({ settings, brands }) {
+  const stats = [
+    { num: settings.about_stat_1_number || '50+', label: settings.about_stat_1_label || 'Years in the Industry' },
+    { num: settings.about_stat_2_number || '500+', label: settings.about_stat_2_label || 'Years Combined Experience' },
+    { num: settings.about_stat_3_number || '10,000+', label: settings.about_stat_3_label || 'Kitchen Hours' },
+    { num: settings.about_stat_4_number || '16', label: settings.about_stat_4_label || 'Global Manufacturing Partners' }
+  ];
+
+  const storyText = settings.about_story || '';
+  const paragraphs = storyText.split(/\\n\\n|\n\n/).filter(p => p.trim());
+
+  return (
+    <div className="min-h-screen bg-gray-900">
+      {/* Hero */}
+      <section className="relative py-32 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-red-950"></div>
+        <div className="absolute inset-0 bg-black opacity-40"></div>
+        <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
+          <p className="text-red-500 font-semibold text-lg mb-4 tracking-wider uppercase">Our Story</p>
+          <h1 className="text-5xl md:text-7xl font-bold mb-6">{settings.site_name || 'GBS Foodservice Equipment Inc'}</h1>
+          <p className="text-xl md:text-2xl text-gray-300">{settings.about_hero_tagline || 'Your trusted partner in foodservice equipment'}</p>
+        </div>
+      </section>
+
+      {/* Stats Bar */}
+      <section className="bg-red-700">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4">
+            {stats.map((s, i) => (
+              <div key={i} className={`py-10 px-6 text-center ${i > 0 ? 'border-l border-red-600' : ''}`}>
+                <div className="text-4xl md:text-5xl font-bold text-white mb-2">{s.num}</div>
+                <div className="text-red-200 text-sm font-medium">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Story Section */}
+      <section className="py-20">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="relative">
+            {/* Decorative accent */}
+            <div className="absolute -left-4 top-0 bottom-0 w-1 bg-gradient-to-b from-red-600 via-red-600/50 to-transparent rounded-full"></div>
+            
+            <div className="pl-8">
+              <h2 className="text-3xl md:text-4xl font-bold mb-10">Built on experience.<br/>Driven by relationships.</h2>
+              
+              {paragraphs.length > 0 ? (
+                <div className="space-y-6">
+                  {paragraphs.map((p, i) => (
+                    <p key={i} className="text-lg text-gray-300 leading-relaxed">{p.trim()}</p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-lg text-gray-300 leading-relaxed">Add your company story in the admin panel under Settings.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Values / Pillars */}
+      <section className="py-20 bg-gray-800">
+        <div className="max-w-7xl mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">What Sets Us Apart</h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              { icon: '🔧', title: 'Kitchen People', desc: 'Our sales team has tens of thousands of hours of real kitchen experience. They\'ve worked the line and know what it takes to run a successful operation.' },
+              { icon: '🌍', title: 'World-Class Partners', desc: 'We\'ve spent decades curating relationships with the world\'s leading equipment manufacturers. Every brand in our portfolio has earned its place.' },
+              { icon: '🇨🇦', title: 'Proudly Canadian', desc: 'From Vancouver to St. John\'s, we deliver coast-to-coast coverage with local service partners, warehouses, and technical specialists across every province.' }
+            ].map((v, i) => (
+              <div key={i} className="bg-gray-900 border border-gray-700 rounded-2xl p-8 hover:border-red-600 transition-colors">
+                <div className="text-4xl mb-6">{v.icon}</div>
+                <h3 className="text-2xl font-bold mb-4">{v.title}</h3>
+                <p className="text-gray-400 leading-relaxed">{v.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Our Approach - Timeline style */}
+      <section className="py-20">
+        <div className="max-w-4xl mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">Our Approach</h2>
+          <div className="space-y-12">
+            {[
+              { step: '01', title: 'Listen', desc: 'We start by understanding your operation — your menu, your volume, your kitchen layout, and your goals. No two kitchens are the same.' },
+              { step: '02', title: 'Recommend', desc: 'Our team draws on decades of hands-on experience to recommend equipment that fits your specific needs — not the most expensive option, the right one.' },
+              { step: '03', title: 'Deliver', desc: 'From installation to training, we ensure your equipment is set up correctly and your team knows how to get the most out of it.' },
+              { step: '04', title: 'Support', desc: 'Our relationship doesn\'t end at delivery. With coast-to-coast service coverage and dedicated support, we\'re here for the long haul.' }
+            ].map((s, i) => (
+              <div key={i} className="flex gap-8 items-start">
+                <div className="flex-shrink-0 w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center">
+                  <span className="text-2xl font-bold text-red-500">{s.step}</span>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold mb-3">{s.title}</h3>
+                  <p className="text-gray-400 text-lg leading-relaxed">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Brands We Represent */}
+      <section className="py-20 bg-gray-800">
+        <div className="max-w-7xl mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">Our Manufacturing Partners</h2>
+          <p className="text-xl text-gray-400 text-center mb-12">Representing the finest names in global foodservice equipment</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+            {brands.map(b => (
+              <div key={b.id} className="bg-gray-900 border border-gray-700 rounded-xl p-5 text-center">
+                {b.image_url ? (
+                  <div className="h-12 flex items-center justify-center mb-3"><img src={b.image_url} alt={b.name} className="max-h-full max-w-full object-contain" /></div>
+                ) : (
+                  <div className="text-2xl font-bold text-gray-600 mb-3">{b.logo}</div>
+                )}
+                <div className="font-semibold text-sm">{b.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-20 bg-gradient-to-r from-red-900 to-red-800">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h2 className="text-4xl md:text-5xl font-bold mb-6">Let's Talk Equipment</h2>
+          <p className="text-xl text-red-100 mb-8">Whether you're opening a new kitchen or upgrading an existing one, our team is ready to help.</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a href={'mailto:' + (settings.contact_email || 'info@gbscooks.com')} className="bg-white text-red-900 px-8 py-4 rounded-full text-lg font-medium hover:bg-gray-100 inline-flex items-center justify-center"><Mail className="mr-2" size={24} />Email Us</a>
+            {settings.contact_phone && <a href={'tel:' + settings.contact_phone} className="bg-red-700 text-white border border-red-500 px-8 py-4 rounded-full text-lg font-medium hover:bg-red-600 inline-flex items-center justify-center"><Phone className="mr-2" size={24} />Call Us</a>}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
 
 function ServicePage() { return <div className="min-h-screen bg-gray-900"><section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">Service & Support</h1><p className="text-xl text-gray-400">Unrivalled service across Canada</p></div></section><section className="py-20"><div className="max-w-7xl mx-auto px-4 grid md:grid-cols-3 gap-8">{[{i:<Wrench className="text-red-500" size={48}/>,t:'Installation',d:'Professional installation from day one.'},{i:<Wrench className="text-red-500" size={48}/>,t:'Maintenance',d:'Regular maintenance for peak performance.'},{i:<Phone className="text-red-500" size={48}/>,t:'24/7 Support',d:'Round-the-clock support ensuring minimal downtime.'}].map((s,idx) => <div key={idx} className="bg-gray-800 border border-gray-700 p-8 rounded-2xl">{s.i}<h3 className="text-2xl font-bold mb-4 mt-6">{s.t}</h3><p className="text-gray-400">{s.d}</p></div>)}</div></section></div>; }
 
