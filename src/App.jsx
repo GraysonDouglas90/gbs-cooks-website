@@ -76,6 +76,15 @@ function useBlogPosts() {
   return posts;
 }
 
+// Hook to fetch hero slides
+function useHeroSlides() {
+  const [slides, setSlides] = useState([]);
+  useEffect(() => {
+    supabase.from('hero_slides').select('*').eq('active', true).order('sort_order').then(({ data }) => setSlides(data || []));
+  }, []);
+  return slides;
+}
+
 function App() {
   const [route, setRoute] = useState(getPageFromHash());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -84,6 +93,7 @@ function App() {
   const brands = useBrands();
   const allProducts = useProducts();
   const blogPosts = useBlogPosts();
+  const heroSlides = useHeroSlides();
 
   const currentPage = route.page;
 
@@ -157,7 +167,7 @@ function App() {
       </header>
 
       <main className="pt-20">
-        {currentPage === 'home' && <HomePage navigate={navigate} brands={brands} blogPosts={blogPosts} />}
+        {currentPage === 'home' && <HomePage navigate={navigate} brands={brands} blogPosts={blogPosts} heroSlides={heroSlides} />}
         {currentPage === 'products' && <ProductsPage navigate={navigate} brands={brands} allProducts={allProducts} initialBrand={navState.brand} initialCategory={navState.category} />}
         {currentPage === 'product-detail' && <ProductDetailPage navigate={navigate} brands={brands} product={navState.product || findProductBySlug()} brandId={navState.brandId} />}
         {currentPage === 'about' && <AboutPage />}
@@ -181,9 +191,20 @@ function App() {
   );
 }
 
-function HomePage({ navigate, brands, blogPosts }) {
+function HomePage({ navigate, brands, blogPosts, heroSlides }) {
   const mapRef = useRef(null);
   const [mapProgress, setMapProgress] = useState(0);
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Auto-rotate slides
+  useEffect(() => {
+    if (heroSlides.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % heroSlides.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [heroSlides.length]);
+
   useEffect(() => {
     const h = () => {
       if (!mapRef.current) return;
@@ -198,19 +219,55 @@ function HomePage({ navigate, brands, blogPosts }) {
   }, []);
   const pIdx = Math.min(Math.floor(mapProgress * provinces.length), provinces.length - 1);
 
+  const activeSlide = heroSlides[currentSlide];
+
   return (
     <>
+      {/* Hero Slideshow */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-red-950"></div>
-        <div className="absolute inset-0 bg-black opacity-50"></div>
-        <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">Premium Equipment<br/>Unrivalled Support</h1>
-          <p className="text-xl md:text-2xl mb-8 text-gray-300 max-w-3xl mx-auto">Canada's trusted partner for professional foodservice equipment. Proudly Canadian, delivering coast-to-coast service and expertise.</p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button onClick={() => navigate('products')} className="bg-red-600 text-white px-8 py-4 rounded-full text-lg font-medium hover:bg-red-700">Explore Equipment</button>
-            <button onClick={() => navigate('demo')} className="bg-white text-gray-900 px-8 py-4 rounded-full text-lg font-medium hover:bg-gray-100">Book a Demo</button>
-          </div>
-        </div>
+        {/* Background layers for all slides */}
+        {heroSlides.length > 0 ? (
+          <>
+            {heroSlides.map((slide, idx) => (
+              <div key={slide.id} className={`absolute inset-0 transition-opacity duration-1000 ${idx === currentSlide ? 'opacity-100' : 'opacity-0'}`}>
+                {slide.image_url ? (
+                  <img src={slide.image_url} alt={slide.headline} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-gray-900 via-black to-red-950"></div>
+                )}
+              </div>
+            ))}
+            <div className="absolute inset-0 bg-black opacity-50"></div>
+            <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
+              <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight transition-opacity duration-500">{activeSlide?.headline || 'Premium Equipment, Unrivalled Support'}</h1>
+              <p className="text-xl md:text-2xl mb-8 text-gray-300 max-w-3xl mx-auto transition-opacity duration-500">{activeSlide?.subheadline || ''}</p>
+              {activeSlide?.button_text && (
+                <button onClick={() => navigate(activeSlide.button_link || 'products')} className="bg-red-600 text-white px-8 py-4 rounded-full text-lg font-medium hover:bg-red-700">{activeSlide.button_text}</button>
+              )}
+            </div>
+            {/* Slide indicators */}
+            {heroSlides.length > 1 && (
+              <div className="absolute bottom-8 left-0 right-0 z-20 flex justify-center space-x-3">
+                {heroSlides.map((_, idx) => (
+                  <button key={idx} onClick={() => setCurrentSlide(idx)} className={`w-3 h-3 rounded-full transition-all ${idx === currentSlide ? 'bg-red-600 w-8' : 'bg-white/50 hover:bg-white/70'}`} />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-red-950"></div>
+            <div className="absolute inset-0 bg-black opacity-50"></div>
+            <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
+              <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">Premium Equipment<br/>Unrivalled Support</h1>
+              <p className="text-xl md:text-2xl mb-8 text-gray-300 max-w-3xl mx-auto">Canada's trusted partner for professional foodservice equipment. Proudly Canadian, delivering coast-to-coast service and expertise.</p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button onClick={() => navigate('products')} className="bg-red-600 text-white px-8 py-4 rounded-full text-lg font-medium hover:bg-red-700">Explore Equipment</button>
+                <button onClick={() => navigate('demo')} className="bg-white text-gray-900 px-8 py-4 rounded-full text-lg font-medium hover:bg-gray-100">Book a Demo</button>
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       {/* Brands from database */}
