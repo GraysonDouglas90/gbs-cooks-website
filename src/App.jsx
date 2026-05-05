@@ -27,32 +27,70 @@ const provinces = [
 
 const clientLogos = ['Client 1','Client 2','Client 3','Client 4','Client 5','Client 6','Client 7','Client 8','Client 9','Client 10'];
 
-// Province SVG silhouette paths (simplified)
-const provincePaths = {
-  BC: "M0 20C5 15 10 5 15 0L25 2L30 10L28 25L35 40L40 55L38 70L30 80L20 85L10 78L5 65L0 50Z",
-  AB: "M0 0L30 0L30 80L0 80Z",
-  SK: "M0 0L30 0L30 80L0 80Z",
-  MB: "M0 0L28 0L32 15L30 30L28 45L30 65L28 80L0 80Z",
-  ON: "M0 30L10 20L20 10L35 0L50 5L60 15L65 30L60 45L55 55L45 65L50 75L40 80L25 78L15 70L5 60L0 45Z",
-  QC: "M0 25L15 10L30 0L50 5L60 20L55 35L60 50L50 65L55 80L40 85L20 80L10 70L5 55L0 40Z",
-  NB: "M0 10L10 0L25 5L30 15L25 30L15 35L5 30Z",
-  NS: "M0 15L5 5L15 0L25 5L30 15L20 25L10 30L0 25Z",
-  PEI: "M0 5L5 0L15 0L20 5L15 10L5 10Z",
-  NL: "M0 20L10 5L20 0L30 5L35 20L30 40L20 50L10 45L5 35Z"
-};
+// Canada map - simplified but recognizable province outlines positioned geographically
+// Each province is positioned relative to a full Canada map spanning the scroll
+function CanadaMap({ progress, activeIndex }) {
+  // Province shapes with geographic x positions (0=west coast, 100=east coast)
+  const mapProvinces = [
+    { abbr: 'BC', x: 2, w: 12, path: "M0,15 L3,5 L6,0 L10,2 L14,8 L16,5 L20,10 L22,4 L26,8 L30,6 L28,18 L32,25 L35,35 L38,30 L40,42 L38,55 L35,60 L40,70 L38,80 L32,88 L25,92 L18,95 L10,90 L5,82 L2,70 L0,55 Z" },
+    { abbr: 'AB', x: 14, w: 10, path: "M0,8 L32,8 L32,92 L0,92 Z" },
+    { abbr: 'SK', x: 24, w: 10, path: "M0,8 L32,8 L32,92 L0,92 Z" },
+    { abbr: 'MB', x: 34, w: 11, path: "M0,8 L28,8 L32,18 L30,28 L34,38 L32,48 L28,55 L32,65 L30,78 L28,92 L0,92 Z" },
+    { abbr: 'ON', x: 44, w: 16, path: "M0,35 L5,28 L12,18 L20,10 L30,5 L40,0 L48,8 L52,18 L50,28 L55,35 L58,45 L55,55 L48,62 L52,70 L55,80 L48,88 L38,92 L25,90 L15,82 L8,70 L2,58 L0,48 Z" },
+    { abbr: 'QC', x: 58, w: 18, path: "M0,30 L8,18 L18,8 L28,0 L42,5 L52,15 L55,28 L50,38 L55,48 L52,60 L48,68 L55,78 L48,88 L35,92 L22,88 L12,78 L5,65 L2,50 L0,40 Z" },
+    { abbr: 'NB', x: 76, w: 7, path: "M0,15 L8,5 L18,0 L28,8 L32,20 L28,35 L20,42 L10,38 L2,28 Z" },
+    { abbr: 'NS', x: 82, w: 8, path: "M0,20 L5,8 L15,0 L25,3 L32,12 L35,22 L28,32 L18,38 L8,35 L2,28 Z" },
+    { abbr: 'PEI', x: 82, w: 5, path: "M0,5 L5,0 L18,0 L22,5 L18,12 L5,12 Z" },
+    { abbr: 'NL', x: 88, w: 10, path: "M0,22 L8,8 L18,0 L28,5 L35,18 L32,32 L25,42 L30,55 L22,62 L12,58 L5,45 L2,35 Z" }
+  ];
 
-const provinceScales = {
-  BC: 3.2, AB: 2.8, SK: 2.8, MB: 2.8, ON: 3.0, QC: 3.0, NB: 2.4, NS: 2.2, PEI: 2.0, NL: 2.6
-};
-
-function ProvinceShape({ abbr, active }) {
-  const path = provincePaths[abbr];
-  const scale = provinceScales[abbr] || 2.5;
-  if (!path) return null;
   return (
-    <svg viewBox="0 0 70 90" style={{ width: `${70 * scale}px`, height: `${90 * scale}px`, position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', opacity: active ? 0.12 : 0.03, transition: 'opacity 0.8s ease', pointerEvents: 'none' }}>
-      <path d={path} fill="#ef4444" stroke="#ef4444" strokeWidth="0.5" strokeOpacity={active ? 0.3 : 0.05} />
-    </svg>
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      overflow: 'hidden',
+      pointerEvents: 'none'
+    }}>
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        transform: `translateX(${50 - progress * 100}%) translateY(-50%)`,
+        transition: 'transform 0.3s ease-out',
+        width: '300vw',
+        height: '80vh',
+        display: 'flex',
+        alignItems: 'center'
+      }}>
+        {mapProvinces.map((prov, idx) => {
+          const isActive = idx === activeIndex;
+          return (
+            <svg
+              key={prov.abbr}
+              viewBox="0 0 60 100"
+              style={{
+                position: 'absolute',
+                left: `${prov.x}%`,
+                width: `${prov.w}%`,
+                height: '100%',
+                opacity: isActive ? 0.2 : 0.04,
+                transition: 'opacity 0.8s ease',
+                filter: isActive ? 'none' : 'none'
+              }}
+            >
+              <path
+                d={prov.path}
+                fill={isActive ? '#dc2626' : '#991b1b'}
+                stroke={isActive ? '#ef4444' : '#7f1d1d'}
+                strokeWidth="0.5"
+              />
+            </svg>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -339,13 +377,15 @@ function HomePage({ navigate, brands, blogPosts, heroSlides }) {
       <section ref={mapRef} className="relative bg-black" style={{ height: '250vh' }}>
         <div className="sticky top-0 h-screen flex items-center overflow-hidden">
           <div className="w-full">
+            {/* Canada map background */}
+            <CanadaMap progress={mapProgress} activeIndex={pIdx} />
+
             <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black to-transparent pt-16 pb-8"><div className="text-center"><h2 className="text-3xl md:text-5xl font-bold mb-3">Coast to Coast Coverage</h2><p className="text-lg text-gray-400">Scroll to explore our nationwide service network</p></div></div>
-            <div className="flex items-center h-screen" style={{ transform: `translateX(calc(${-pIdx * 340}px + 50vw - 160px))`, transition: 'transform 0.3s ease-out' }}>
+            <div className="flex items-center h-screen relative z-10" style={{ transform: `translateX(calc(${-pIdx * 340}px + 50vw - 160px))`, transition: 'transform 0.3s ease-out' }}>
               <div className="flex items-center gap-6">
                 {provinces.map((pr, idx) => (
-                  <div key={pr.abbr} className={`flex-shrink-0 transition-all duration-500 ${idx === pIdx ? 'scale-105 opacity-100' : 'scale-90 opacity-40'}`} style={{ width: '320px', position: 'relative' }}>
-                    <ProvinceShape abbr={pr.abbr} active={idx === pIdx} />
-                    <div className="bg-gradient-to-br from-gray-900/90 to-gray-950/90 backdrop-blur-sm rounded-2xl p-6 border-2 border-gray-700 relative z-10">
+                  <div key={pr.abbr} className={`flex-shrink-0 transition-all duration-500 ${idx === pIdx ? 'scale-105 opacity-100' : 'scale-90 opacity-40'}`} style={{ width: '320px' }}>
+                    <div className="bg-gradient-to-br from-gray-900/90 to-gray-950/90 backdrop-blur-sm rounded-2xl p-6 border-2 border-gray-700">
                       <div className="text-5xl font-bold text-red-600 mb-3 text-center">{pr.abbr}</div>
                       <h3 className="text-xl font-bold mb-4 text-center">{pr.name}</h3>
                       <div className="space-y-3 bg-gray-800/50 rounded-xl p-4">
