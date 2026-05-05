@@ -190,6 +190,49 @@ function ProductsTab({ brands, products, fetchProducts, editingProduct, setEditi
   const [specs, setSpecs] = useState([{ spec_name: '', spec_value: '' }]);
   const [features, setFeatures] = useState(['']);
   const [filterBrand, setFilterBrand] = useState('all');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showHidden, setShowHidden] = useState(false);
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const selectAll = () => {
+    const visibleIds = filtered.map(p => p.id);
+    if (visibleIds.every(id => selectedIds.includes(id))) setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)));
+    else setSelectedIds(prev => [...new Set([...prev, ...visibleIds])]);
+  };
+
+  const massDelete = async () => {
+    if (selectedIds.length === 0) return showMsg('No products selected');
+    if (!confirm(`Delete ${selectedIds.length} products? This cannot be undone.`)) return;
+    for (const id of selectedIds) {
+      await supabase.from('product_specs').delete().eq('product_id', id);
+      await supabase.from('product_features').delete().eq('product_id', id);
+      await supabase.from('product_images').delete().eq('product_id', id);
+      await supabase.from('product_documents').delete().eq('product_id', id);
+      await supabase.from('products').delete().eq('id', id);
+    }
+    showMsg(`Deleted ${selectedIds.length} products`);
+    setSelectedIds([]);
+    fetchProducts();
+  };
+
+  const massTogglePublished = async (publish) => {
+    if (selectedIds.length === 0) return showMsg('No products selected');
+    for (const id of selectedIds) {
+      await supabase.from('products').update({ published: publish }).eq('id', id);
+    }
+    showMsg(`${publish ? 'Published' : 'Hidden'} ${selectedIds.length} products`);
+    setSelectedIds([]);
+    fetchProducts();
+  };
+
+  const togglePublished = async (product) => {
+    await supabase.from('products').update({ published: !product.published }).eq('id', product.id);
+    showMsg(product.published ? 'Product hidden' : 'Product published');
+    fetchProducts();
+  };
 
   useEffect(() => {
     if (editingProduct) {
@@ -236,7 +279,7 @@ function ProductsTab({ brands, products, fetchProducts, editingProduct, setEditi
     fetchProducts();
   };
 
-  const filtered = filterBrand === 'all' ? products : products.filter(p => p.brand_id === filterBrand);
+  const filtered = (filterBrand === 'all' ? products : products.filter(p => p.brand_id === filterBrand)).filter(p => showHidden ? true : p.published !== false);
 
   return (
     <div>
@@ -259,27 +302,71 @@ function ProductsTab({ brands, products, fetchProducts, editingProduct, setEditi
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold">All Products ({filtered.length})</h3>
-        <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)} className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"><option value="all">All Brands</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+      {/* Product list header with filters and bulk actions */}
+      <div className="flex flex-col gap-4 mb-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold">All Products ({filtered.length})</h3>
+          <div className="flex items-center space-x-3">
+            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+              <input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} className="rounded" />
+              <span className="text-gray-400">Show hidden</span>
+            </label>
+            <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)} className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"><option value="all">All Brands</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+          </div>
+        </div>
+
+        {/* Bulk actions bar */}
+        {selectedIds.length > 0 && (
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex items-center justify-between">
+            <span className="text-sm font-semibold">{selectedIds.length} selected</span>
+            <div className="flex space-x-2">
+              <button onClick={() => massTogglePublished(true)} className="px-4 py-1.5 bg-green-900/30 text-green-400 rounded-lg text-sm hover:bg-green-900/50">Publish All</button>
+              <button onClick={() => massTogglePublished(false)} className="px-4 py-1.5 bg-yellow-900/30 text-yellow-400 rounded-lg text-sm hover:bg-yellow-900/50">Hide All</button>
+              <button onClick={massDelete} className="px-4 py-1.5 bg-red-900/30 text-red-400 rounded-lg text-sm hover:bg-red-900/50">Delete All</button>
+              <button onClick={() => setSelectedIds([])} className="px-4 py-1.5 bg-gray-700 text-gray-300 rounded-lg text-sm hover:bg-gray-600">Clear</button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Select all checkbox */}
+      {filtered.length > 0 && (
+        <div className="mb-3">
+          <label className="flex items-center space-x-2 cursor-pointer text-sm text-gray-400">
+            <input type="checkbox" checked={filtered.length > 0 && filtered.every(p => selectedIds.includes(p.id))} onChange={selectAll} className="rounded" />
+            <span>Select all visible ({filtered.length})</span>
+          </label>
+        </div>
+      )}
+
       <div className="space-y-3">
         {filtered.map(p => {
           const b = brands.find(br => br.id === p.brand_id);
+          const isSelected = selectedIds.includes(p.id);
+          const isHidden = p.published === false;
           return (
-            <div key={p.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+            <div key={p.id} className={`bg-gray-900 border rounded-xl p-4 flex items-center justify-between ${isSelected ? 'border-red-600' : isHidden ? 'border-gray-800 opacity-60' : 'border-gray-700'}`}>
               <div className="flex items-center space-x-4">
+                <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(p.id)} className="rounded flex-shrink-0" />
                 <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center text-lg font-bold text-red-500">{b?.logo}</div>
-                <div><div className="font-bold">{p.name}</div><div className="text-sm text-gray-400">{b?.name} &bull; {p.model} &bull; {p.category}</div><div className="text-xs text-gray-500">{p.product_images?.length || 0} images &bull; {p.product_documents?.length || 0} documents</div></div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold">{p.name}</span>
+                    {isHidden && <span className="px-2 py-0.5 rounded text-xs bg-yellow-900/30 text-yellow-400">Hidden</span>}
+                  </div>
+                  <div className="text-sm text-gray-400">{b?.name} &bull; {p.model} &bull; {p.category}</div>
+                  <div className="text-xs text-gray-500">{p.product_images?.length || 0} images &bull; {p.product_documents?.length || 0} documents</div>
+                </div>
               </div>
               <div className="flex space-x-2">
+                <button onClick={() => togglePublished(p)} className="px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700">{isHidden ? 'Show' : 'Hide'}</button>
                 <button onClick={() => setEditingProduct(p)} className="px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700">Edit</button>
                 <button onClick={() => deleteProduct(p.id)} className="px-4 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm hover:bg-red-900/50">Delete</button>
               </div>
             </div>
           );
         })}
-        {filtered.length === 0 && <p className="text-gray-500 text-center py-8">No products yet.</p>}
+        {filtered.length === 0 && <p className="text-gray-500 text-center py-8">No products found.</p>}
       </div>
     </div>
   );
