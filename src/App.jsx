@@ -338,21 +338,32 @@ function HomePage({ navigate, brands, blogPosts, heroSlides }) {
       </section>
 
       {/* Brands from database */}
-      <section className="py-20 bg-gray-800">
+      <section className="py-16 bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16"><h2 className="text-4xl md:text-5xl font-bold mb-4">Our Brands</h2><p className="text-xl text-gray-400">Industry-leading manufacturers we proudly represent</p></div>
+          <div className="text-center mb-12"><h2 className="text-4xl md:text-5xl font-bold mb-4">Our Brands</h2><p className="text-xl text-gray-400">Industry-leading manufacturers we proudly represent</p></div>
           {brands.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
               {brands.map(b => (
-                <button key={b.id} onClick={() => navigate('products', { brand: b.id })} className="group bg-gray-900 hover:bg-gray-950 border border-gray-700 hover:border-red-600 p-8 rounded-2xl transition-all">
+                <button key={b.id} onClick={() => navigate('products', { brand: b.id })} className="group relative overflow-hidden rounded-xl border border-gray-700 hover:border-red-600 transition-all" style={{ height: '120px' }}>
+                  {/* Background */}
                   {b.image_url ? (
-                    <div className="h-24 flex items-center justify-center mb-4"><img src={b.image_url} alt={b.name} className="max-h-full max-w-full object-contain" /></div>
+                    <>
+                      <img src={b.image_url} alt={b.name} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity duration-300" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-gray-900/40 via-gray-900/80 to-gray-900/95"></div>
+                    </>
                   ) : (
-                    <div className="text-4xl font-bold text-gray-600 group-hover:text-red-600 mb-4 transition-colors">{b.logo}</div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+                      <div className="absolute top-3 left-4 text-6xl font-bold text-red-600/15 leading-none">{b.logo}</div>
+                    </div>
                   )}
-                  <h3 className="text-xl font-bold mb-2">{b.name}</h3>
-                  <p className="text-sm text-gray-400 mb-4">{b.tagline}</p>
-                  <ChevronRight className="ml-auto text-gray-600 group-hover:text-red-600 transition-colors" />
+                  {/* Content */}
+                  <div className="relative z-10 h-full flex items-center justify-between px-6">
+                    <div>
+                      <h3 className="text-xl font-bold mb-1 group-hover:text-red-400 transition-colors">{b.name}</h3>
+                      <p className="text-sm text-gray-400">{b.tagline}</p>
+                    </div>
+                    <ChevronRight className="text-gray-600 group-hover:text-red-500 transition-colors flex-shrink-0" size={24} />
+                  </div>
                 </button>
               ))}
             </div>
