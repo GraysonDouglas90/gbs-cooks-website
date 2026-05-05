@@ -27,6 +27,35 @@ const provinces = [
 
 const clientLogos = ['Client 1','Client 2','Client 3','Client 4','Client 5','Client 6','Client 7','Client 8','Client 9','Client 10'];
 
+// Province SVG silhouette paths (simplified)
+const provincePaths = {
+  BC: "M0 20C5 15 10 5 15 0L25 2L30 10L28 25L35 40L40 55L38 70L30 80L20 85L10 78L5 65L0 50Z",
+  AB: "M0 0L30 0L30 80L0 80Z",
+  SK: "M0 0L30 0L30 80L0 80Z",
+  MB: "M0 0L28 0L32 15L30 30L28 45L30 65L28 80L0 80Z",
+  ON: "M0 30L10 20L20 10L35 0L50 5L60 15L65 30L60 45L55 55L45 65L50 75L40 80L25 78L15 70L5 60L0 45Z",
+  QC: "M0 25L15 10L30 0L50 5L60 20L55 35L60 50L50 65L55 80L40 85L20 80L10 70L5 55L0 40Z",
+  NB: "M0 10L10 0L25 5L30 15L25 30L15 35L5 30Z",
+  NS: "M0 15L5 5L15 0L25 5L30 15L20 25L10 30L0 25Z",
+  PEI: "M0 5L5 0L15 0L20 5L15 10L5 10Z",
+  NL: "M0 20L10 5L20 0L30 5L35 20L30 40L20 50L10 45L5 35Z"
+};
+
+const provinceScales = {
+  BC: 3.2, AB: 2.8, SK: 2.8, MB: 2.8, ON: 3.0, QC: 3.0, NB: 2.4, NS: 2.2, PEI: 2.0, NL: 2.6
+};
+
+function ProvinceShape({ abbr, active }) {
+  const path = provincePaths[abbr];
+  const scale = provinceScales[abbr] || 2.5;
+  if (!path) return null;
+  return (
+    <svg viewBox="0 0 70 90" style={{ width: `${70 * scale}px`, height: `${90 * scale}px`, position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', opacity: active ? 0.12 : 0.03, transition: 'opacity 0.8s ease', pointerEvents: 'none' }}>
+      <path d={path} fill="#ef4444" stroke="#ef4444" strokeWidth="0.5" strokeOpacity={active ? 0.3 : 0.05} />
+    </svg>
+  );
+}
+
 function getPageFromHash() {
   const hash = window.location.hash.replace('#/', '').replace('#', '');
   if (!hash || hash === '/') return { page: 'home' };
@@ -314,8 +343,9 @@ function HomePage({ navigate, brands, blogPosts, heroSlides }) {
             <div className="flex items-center h-screen" style={{ transform: `translateX(calc(${-pIdx * 340}px + 50vw - 160px))`, transition: 'transform 0.3s ease-out' }}>
               <div className="flex items-center gap-6">
                 {provinces.map((pr, idx) => (
-                  <div key={pr.abbr} className={`flex-shrink-0 transition-all duration-500 ${idx === pIdx ? 'scale-105 opacity-100' : 'scale-90 opacity-40'}`} style={{ width: '320px' }}>
-                    <div className="bg-gradient-to-br from-gray-900 to-gray-950 rounded-2xl p-6 border-2 border-gray-700">
+                  <div key={pr.abbr} className={`flex-shrink-0 transition-all duration-500 ${idx === pIdx ? 'scale-105 opacity-100' : 'scale-90 opacity-40'}`} style={{ width: '320px', position: 'relative' }}>
+                    <ProvinceShape abbr={pr.abbr} active={idx === pIdx} />
+                    <div className="bg-gradient-to-br from-gray-900/90 to-gray-950/90 backdrop-blur-sm rounded-2xl p-6 border-2 border-gray-700 relative z-10">
                       <div className="text-5xl font-bold text-red-600 mb-3 text-center">{pr.abbr}</div>
                       <h3 className="text-xl font-bold mb-4 text-center">{pr.name}</h3>
                       <div className="space-y-3 bg-gray-800/50 rounded-xl p-4">
