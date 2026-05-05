@@ -57,7 +57,7 @@ export default function Admin() {
 
       <div className="bg-gray-900 border-b border-gray-800 px-6">
         <div className="flex space-x-6">
-          {['brands', 'products', 'images', 'import', 'blog'].map(t => (
+          {['brands', 'products', 'images', 'import', 'hero', 'blog'].map(t => (
             <button key={t} onClick={() => { setTab(t); setEditingProduct(null); setEditingBrand(null); }} className={`py-4 font-semibold capitalize border-b-2 transition-colors ${tab === t ? 'border-red-600 text-red-500' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t}</button>
           ))}
         </div>
@@ -68,6 +68,7 @@ export default function Admin() {
         {tab === 'products' && <ProductsTab brands={brands} products={products} fetchProducts={fetchProducts} editingProduct={editingProduct} setEditingProduct={setEditingProduct} showMsg={showMsg} />}
         {tab === 'images' && <ImagesTab products={products} fetchProducts={fetchProducts} showMsg={showMsg} />}
         {tab === 'import' && <ImportTab brands={brands} fetchProducts={fetchProducts} showMsg={showMsg} />}
+        {tab === 'hero' && <HeroTab showMsg={showMsg} />}
         {tab === 'blog' && <BlogTab showMsg={showMsg} />}
       </div>
     </div>
@@ -385,6 +386,161 @@ function ImagesTab({ products, fetchProducts, showMsg }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function HeroTab({ showMsg }) {
+  const [slides, setSlides] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ headline: '', subheadline: '', button_text: '', button_link: '', active: true });
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => { fetchSlides(); }, []);
+  const fetchSlides = async () => {
+    const { data } = await supabase.from('hero_slides').select('*').order('sort_order');
+    setSlides(data || []);
+  };
+
+  useEffect(() => {
+    if (editing) setForm({ headline: editing.headline || '', subheadline: editing.subheadline || '', button_text: editing.button_text || '', button_link: editing.button_link || '', active: editing.active !== false });
+    else setForm({ headline: '', subheadline: '', button_text: '', button_link: '', active: true });
+  }, [editing]);
+
+  const saveSlide = async () => {
+    if (!form.headline) return showMsg('Headline is required');
+    if (editing) {
+      await supabase.from('hero_slides').update({ ...form }).eq('id', editing.id);
+      showMsg('Slide updated!');
+    } else {
+      await supabase.from('hero_slides').insert([{ ...form, sort_order: slides.length }]);
+      showMsg('Slide added!');
+    }
+    setEditing(null);
+    setForm({ headline: '', subheadline: '', button_text: '', button_link: '', active: true });
+    fetchSlides();
+  };
+
+  const deleteSlide = async (id) => {
+    if (!confirm('Delete this slide?')) return;
+    await supabase.from('hero_slides').delete().eq('id', id);
+    showMsg('Slide deleted');
+    fetchSlides();
+  };
+
+  const uploadSlideImage = async (e, slideId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `hero/${slideId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-assets').upload(fileName, file);
+    if (error) { showMsg('Upload failed: ' + error.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('product-assets').getPublicUrl(fileName);
+    await supabase.from('hero_slides').update({ image_url: publicUrl }).eq('id', slideId);
+    showMsg('Slide image uploaded!');
+    setUploading(false);
+    fetchSlides();
+  };
+
+  const moveSlide = async (idx, dir) => {
+    const newSlides = [...slides];
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= newSlides.length) return;
+    [newSlides[idx], newSlides[swapIdx]] = [newSlides[swapIdx], newSlides[idx]];
+    for (let i = 0; i < newSlides.length; i++) {
+      await supabase.from('hero_slides').update({ sort_order: i }).eq('id', newSlides[i].id);
+    }
+    fetchSlides();
+  };
+
+  const toggleActive = async (slide) => {
+    await supabase.from('hero_slides').update({ active: !slide.active }).eq('id', slide.id);
+    fetchSlides();
+  };
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6">{editing ? 'Edit Slide' : 'Add New Hero Slide'}</h2>
+
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Headline *</label>
+            <input value={form.headline} onChange={e => setForm({...form, headline: e.target.value})} placeholder="e.g. Premium Equipment, Unrivalled Support" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Subheadline</label>
+            <input value={form.subheadline} onChange={e => setForm({...form, subheadline: e.target.value})} placeholder="e.g. Canada's trusted partner for professional foodservice equipment" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Button Text (optional)</label>
+              <input value={form.button_text} onChange={e => setForm({...form, button_text: e.target.value})} placeholder="e.g. Explore Equipment" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Button Link (optional)</label>
+              <input value={form.button_link} onChange={e => setForm({...form, button_link: e.target.value})} placeholder="e.g. products or demo" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+            </div>
+          </div>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input type="checkbox" checked={form.active} onChange={e => setForm({...form, active: e.target.checked})} className="rounded" />
+            <span className="text-gray-300">Active (visible on site)</span>
+          </label>
+          <div className="flex space-x-3">
+            <button onClick={saveSlide} className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700">{editing ? 'Update Slide' : 'Add Slide'}</button>
+            {editing && <button onClick={() => setEditing(null)} className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancel</button>}
+          </div>
+        </div>
+      </div>
+
+      <h3 className="text-xl font-bold mb-4">All Slides ({slides.length})</h3>
+      <p className="text-sm text-gray-400 mb-4">Slides auto-rotate every 6 seconds on the homepage. Drag order with the arrows.</p>
+
+      <div className="space-y-3">
+        {slides.map((s, idx) => (
+          <div key={s.id} className={`bg-gray-900 border rounded-xl p-4 ${s.active ? 'border-gray-700' : 'border-gray-800 opacity-60'}`}>
+            <div className="flex items-start gap-4">
+              {/* Image preview */}
+              <div className="flex-shrink-0">
+                {s.image_url ? (
+                  <img src={s.image_url} alt={s.headline} className="w-40 h-24 object-cover rounded-lg" />
+                ) : (
+                  <div className="w-40 h-24 bg-gray-800 rounded-lg flex items-center justify-center text-gray-500 text-sm">No image</div>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="flex-1">
+                <div className="flex items-center space-x-2 mb-1">
+                  <span className="font-bold">{s.headline}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs ${s.active ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'}`}>{s.active ? 'Active' : 'Inactive'}</span>
+                </div>
+                <p className="text-sm text-gray-400 mb-2">{s.subheadline}</p>
+                {s.button_text && <span className="text-xs text-gray-500">Button: {s.button_text} → {s.button_link}</span>}
+
+                {/* Image upload */}
+                <div className="mt-2">
+                  <label className="inline-block bg-gray-800 border border-dashed border-gray-600 rounded-lg px-3 py-1.5 text-xs cursor-pointer hover:border-red-600">
+                    <input type="file" accept="image/*" onChange={e => uploadSlideImage(e, s.id)} className="hidden" />
+                    {uploading ? 'Uploading...' : s.image_url ? 'Replace Image' : 'Upload Background Image'}
+                  </label>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div className="flex flex-col space-y-1 flex-shrink-0">
+                <button onClick={() => moveSlide(idx, -1)} disabled={idx === 0} className="px-3 py-1 bg-gray-800 rounded text-sm disabled:opacity-30">&uarr;</button>
+                <button onClick={() => moveSlide(idx, 1)} disabled={idx === slides.length - 1} className="px-3 py-1 bg-gray-800 rounded text-sm disabled:opacity-30">&darr;</button>
+                <button onClick={() => toggleActive(s)} className="px-3 py-1 bg-gray-800 rounded text-sm">{s.active ? 'Hide' : 'Show'}</button>
+                <button onClick={() => setEditing(s)} className="px-3 py-1 bg-gray-800 rounded text-sm">Edit</button>
+                <button onClick={() => deleteSlide(s.id)} className="px-3 py-1 bg-red-900/30 text-red-400 rounded text-sm">Del</button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {slides.length === 0 && <p className="text-gray-500 text-center py-8">No hero slides yet. Add your first slide above. If no slides exist, the site will show the default hero.</p>}
+      </div>
     </div>
   );
 }
