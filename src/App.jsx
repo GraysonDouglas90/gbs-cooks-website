@@ -42,6 +42,13 @@ function slugify(text) {
   return (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+function FormattedText({ text, className }) {
+  if (!text) return null;
+  const paragraphs = text.split(/\\n\\n|\n\n/).filter(p => p.trim());
+  if (paragraphs.length <= 1) return <p className={className}>{text}</p>;
+  return <div className={className}>{paragraphs.map((p, i) => <p key={i} className={i > 0 ? 'mt-4' : ''}>{p.trim()}</p>)}</div>;
+}
+
 // Hook to fetch brands from Supabase
 function useBrands() {
   const [brands, setBrands] = useState([]);
@@ -439,7 +446,7 @@ function ProductDetailPage({ navigate, brands, product, brandId }) {
             <div className="grid lg:grid-cols-2 gap-12">
               <div>
                 <h2 className="text-3xl font-bold mb-6">Product Overview</h2>
-                <p className="text-lg text-gray-300 leading-relaxed mb-8">{product.full_description}</p>
+                <FormattedText text={product.full_description} className="text-lg text-gray-300 leading-relaxed mb-8" />
                 {product.video_url && <div><h3 className="text-2xl font-bold mb-4">Product Video</h3><div className="rounded-2xl overflow-hidden aspect-video"><iframe src={product.video_url} className="w-full h-full" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe></div></div>}
               </div>
               <div>{features.length > 0 && <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8"><h3 className="text-2xl font-bold mb-6">Key Features</h3><ul className="space-y-4">{features.map(f => <li key={f.id} className="flex items-start"><div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-0.5"><ChevronRight size={14} className="text-white" /></div><span className="text-gray-300">{f.feature}</span></li>)}</ul></div>}</div>
