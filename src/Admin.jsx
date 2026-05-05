@@ -57,7 +57,7 @@ export default function Admin() {
 
       <div className="bg-gray-900 border-b border-gray-800 px-6">
         <div className="flex space-x-6">
-          {['brands', 'products', 'images', 'import', 'hero', 'blog'].map(t => (
+          {['brands', 'products', 'images', 'import', 'hero', 'blog', 'settings'].map(t => (
             <button key={t} onClick={() => { setTab(t); setEditingProduct(null); setEditingBrand(null); }} className={`py-4 font-semibold capitalize border-b-2 transition-colors ${tab === t ? 'border-red-600 text-red-500' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t}</button>
           ))}
         </div>
@@ -69,6 +69,7 @@ export default function Admin() {
         {tab === 'images' && <ImagesTab products={products} fetchProducts={fetchProducts} showMsg={showMsg} />}
         {tab === 'import' && <ImportTab brands={brands} fetchProducts={fetchProducts} showMsg={showMsg} />}
         {tab === 'hero' && <HeroTab showMsg={showMsg} />}
+        {tab === 'settings' && <SettingsTab showMsg={showMsg} />}
         {tab === 'blog' && <BlogTab showMsg={showMsg} />}
       </div>
     </div>
@@ -628,6 +629,108 @@ function HeroTab({ showMsg }) {
         ))}
         {slides.length === 0 && <p className="text-gray-500 text-center py-8">No hero slides yet. Add your first slide above. If no slides exist, the site will show the default hero.</p>}
       </div>
+    </div>
+  );
+}
+
+function SettingsTab({ showMsg }) {
+  const [settings, setSettings] = useState({});
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => { fetchSettings(); }, []);
+
+  const fetchSettings = async () => {
+    const { data } = await supabase.from('site_settings').select('*');
+    const obj = {};
+    (data || []).forEach(r => { obj[r.key] = r.value; });
+    setSettings(obj);
+  };
+
+  const updateSetting = async (key, value) => {
+    await supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() });
+    setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveSetting = async (key) => {
+    await supabase.from('site_settings').upsert({ key, value: settings[key], updated_at: new Date().toISOString() });
+    showMsg('Saved!');
+  };
+
+  const uploadLogo = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `site/logo-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-assets').upload(fileName, file);
+    if (error) { showMsg('Upload failed: ' + error.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('product-assets').getPublicUrl(fileName);
+    await updateSetting('logo_url', publicUrl);
+    showMsg('Logo uploaded!');
+    setUploading(false);
+  };
+
+  const Field = ({ label, settingKey, multiline, placeholder }) => (
+    <div className="mb-4">
+      <label className="block text-sm text-gray-400 mb-1">{label}</label>
+      {multiline ? (
+        <textarea value={settings[settingKey] || ''} onChange={e => setSettings({...settings, [settingKey]: e.target.value})} onBlur={() => saveSetting(settingKey)} rows={6} placeholder={placeholder} className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm" />
+      ) : (
+        <input value={settings[settingKey] || ''} onChange={e => setSettings({...settings, [settingKey]: e.target.value})} onBlur={() => saveSetting(settingKey)} placeholder={placeholder} className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6">Site Settings</h2>
+
+      {/* Logo */}
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <h3 className="text-xl font-bold mb-4">Site Logo</h3>
+        <div className="flex items-center gap-6">
+          {settings.logo_url ? (
+            <div className="bg-gray-800 rounded-lg p-3 h-20 flex items-center"><img src={settings.logo_url} alt="Site logo" className="max-h-full max-w-48 object-contain" /></div>
+          ) : (
+            <div className="bg-gray-800 rounded-lg p-3 h-20 w-48 flex items-center justify-center text-gray-500">No logo uploaded</div>
+          )}
+          <label className="inline-block bg-gray-800 border border-dashed border-gray-600 rounded-lg px-6 py-3 cursor-pointer hover:border-red-600 transition-colors">
+            <input type="file" accept="image/*" onChange={uploadLogo} className="hidden" />
+            {uploading ? 'Uploading...' : settings.logo_url ? 'Replace Logo' : 'Upload Logo'}
+          </label>
+        </div>
+        <p className="text-xs text-gray-500 mt-3">Recommended: PNG with transparent background, max height ~50px for the header</p>
+      </div>
+
+      {/* General */}
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <h3 className="text-xl font-bold mb-4">General</h3>
+        <Field label="Site Name" settingKey="site_name" placeholder="GBS Foodservice Equipment Inc" />
+        <Field label="Contact Email" settingKey="contact_email" placeholder="info@gbscooks.com" />
+        <Field label="Contact Phone" settingKey="contact_phone" placeholder="1-800-555-0000" />
+        <Field label="LinkedIn URL" settingKey="linkedin_url" placeholder="https://www.linkedin.com/company/..." />
+      </div>
+
+      {/* About Page */}
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
+        <h3 className="text-xl font-bold mb-4">About Page Content</h3>
+        <Field label="Hero Tagline" settingKey="about_hero_tagline" placeholder="Your trusted partner since 1974" />
+        <Field label="Full Story (use \n\n for paragraph breaks)" settingKey="about_story" multiline placeholder="Your company story..." />
+        
+        <h4 className="font-bold mt-6 mb-3 text-gray-300">Stats (displayed as large numbers on the About page)</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Stat 1 Number" settingKey="about_stat_1_number" placeholder="50+" />
+          <Field label="Stat 1 Label" settingKey="about_stat_1_label" placeholder="Years in the Industry" />
+          <Field label="Stat 2 Number" settingKey="about_stat_2_number" placeholder="500+" />
+          <Field label="Stat 2 Label" settingKey="about_stat_2_label" placeholder="Years Combined Experience" />
+          <Field label="Stat 3 Number" settingKey="about_stat_3_number" placeholder="10,000+" />
+          <Field label="Stat 3 Label" settingKey="about_stat_3_label" placeholder="Kitchen Hours" />
+          <Field label="Stat 4 Number" settingKey="about_stat_4_number" placeholder="16" />
+          <Field label="Stat 4 Label" settingKey="about_stat_4_label" placeholder="Global Manufacturing Partners" />
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500">All changes save automatically when you click out of a field.</p>
     </div>
   );
 }
