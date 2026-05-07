@@ -999,42 +999,197 @@ function BlogTab({ showMsg }) {
   const [posts, setPosts] = useState([]);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ title: '', excerpt: '', content: '', category: '', published: false });
+  const [uploading, setUploading] = useState('');
+  const [blogImages, setBlogImages] = useState([]);
 
   useEffect(() => { fetchPosts(); }, []);
-  const fetchPosts = async () => { const { data } = await supabase.from('blog_posts').select('*').order('created_at', { ascending: false }); setPosts(data || []); };
+  const fetchPosts = async () => { const { data } = await supabase.from('blog_posts').select('*, blog_images(*)').order('created_at', { ascending: false }); setPosts(data || []); };
 
   useEffect(() => {
-    if (editing) setForm({ title: editing.title || '', excerpt: editing.excerpt || '', content: editing.content || '', category: editing.category || '', published: editing.published || false });
-    else setForm({ title: '', excerpt: '', content: '', category: '', published: false });
+    if (editing) {
+      setForm({ title: editing.title || '', excerpt: editing.excerpt || '', content: editing.content || '', category: editing.category || '', published: editing.published || false });
+      setBlogImages(editing.blog_images || []);
+    } else {
+      setForm({ title: '', excerpt: '', content: '', category: '', published: false });
+      setBlogImages([]);
+    }
   }, [editing]);
 
   const savePost = async () => {
     if (!form.title) return showMsg('Title is required');
-    if (editing) { await supabase.from('blog_posts').update({ ...form, published_at: form.published ? new Date().toISOString() : null }).eq('id', editing.id); showMsg('Post updated!'); }
-    else { await supabase.from('blog_posts').insert([{ ...form, published_at: form.published ? new Date().toISOString() : null }]); showMsg('Post created!'); }
-    setEditing(null); fetchPosts();
+    if (editing) {
+      await supabase.from('blog_posts').update({ ...form, published_at: form.published ? (editing.published_at || new Date().toISOString()) : null }).eq('id', editing.id);
+      showMsg('Post updated!');
+    } else {
+      await supabase.from('blog_posts').insert([{ ...form, published_at: form.published ? new Date().toISOString() : null }]);
+      showMsg('Post created!');
+    }
+    setEditing(null);
+    fetchPosts();
   };
 
-  const deletePost = async (id) => { if (!confirm('Delete this post?')) return; await supabase.from('blog_posts').delete().eq('id', id); showMsg('Post deleted'); fetchPosts(); };
+  const deletePost = async (id) => {
+    if (!confirm('Delete this post and all its images?')) return;
+    await supabase.from('blog_images').delete().eq('post_id', id);
+    await supabase.from('blog_posts').delete().eq('id', id);
+    showMsg('Post deleted');
+    fetchPosts();
+  };
+
+  const uploadHeroImage = async (e, postId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading('hero');
+    const ext = file.name.split('.').pop();
+    const fileName = `blog/${postId}/hero-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-assets').upload(fileName, file);
+    if (error) { showMsg('Upload failed: ' + error.message); setUploading(''); return; }
+    const { data: { publicUrl } } = supabase.storage.from('product-assets').getPublicUrl(fileName);
+    await supabase.from('blog_posts').update({ hero_image_url: publicUrl }).eq('id', postId);
+    showMsg('Hero image uploaded!');
+    setUploading('');
+    fetchPosts();
+  };
+
+  const uploadPdf = async (e, postId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading('pdf');
+    const ext = file.name.split('.').pop();
+    const fileName = `blog/${postId}/pdf-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-assets').upload(fileName, file);
+    if (error) { showMsg('Upload failed: ' + error.message); setUploading(''); return; }
+    const { data: { publicUrl } } = supabase.storage.from('product-assets').getPublicUrl(fileName);
+    await supabase.from('blog_posts').update({ pdf_url: publicUrl }).eq('id', postId);
+    showMsg('PDF uploaded!');
+    setUploading('');
+    fetchPosts();
+  };
+
+  const uploadBlogImage = async (e, postId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading('image');
+    const ext = file.name.split('.').pop();
+    const fileName = `blog/${postId}/img-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-assets').upload(fileName, file);
+    if (error) { showMsg('Upload failed: ' + error.message); setUploading(''); return; }
+    const { data: { publicUrl } } = supabase.storage.from('product-assets').getPublicUrl(fileName);
+    const currentImages = posts.find(p => p.id === postId)?.blog_images || [];
+    await supabase.from('blog_images').insert([{ post_id: postId, image_url: publicUrl, sort_order: currentImages.length }]);
+    showMsg('Image added!');
+    setUploading('');
+    fetchPosts();
+  };
+
+  const deleteBlogImage = async (imgId) => {
+    await supabase.from('blog_images').delete().eq('id', imgId);
+    showMsg('Image deleted');
+    fetchPosts();
+  };
 
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">{editing ? 'Edit Post' : 'New Blog Post'}</h2>
       <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm text-gray-400 mb-1">Title *</label><input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Post title" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div><div><label className="block text-sm text-gray-400 mb-1">Category</label><input value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="e.g. Maintenance" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div></div>
-          <div><label className="block text-sm text-gray-400 mb-1">Excerpt</label><input value={form.excerpt} onChange={e => setForm({...form, excerpt: e.target.value})} placeholder="Brief summary..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
-          <div><label className="block text-sm text-gray-400 mb-1">Content</label><textarea value={form.content} onChange={e => setForm({...form, content: e.target.value})} rows={8} placeholder="Full blog post..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
-          <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" checked={form.published} onChange={e => setForm({...form, published: e.target.checked})} className="rounded" /><span className="text-gray-300">Published</span></label>
-          <div className="flex space-x-3"><button onClick={savePost} className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700">{editing ? 'Update Post' : 'Create Post'}</button>{editing && <button onClick={() => setEditing(null)} className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancel</button>}</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="block text-sm text-gray-400 mb-1">Title *</label><input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Post title" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+            <div><label className="block text-sm text-gray-400 mb-1">Category</label><input value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="e.g. Series Drop, Maintenance" className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          </div>
+          <div><label className="block text-sm text-gray-400 mb-1">Excerpt (shown on blog listing cards)</label><input value={form.excerpt} onChange={e => setForm({...form, excerpt: e.target.value})} placeholder="Brief summary that appears on the card..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Content (use \n\n for paragraph breaks)</label>
+            <textarea value={form.content} onChange={e => setForm({...form, content: e.target.value})} rows={12} placeholder="Full blog post content..." className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white font-mono text-sm" />
+            <p className="text-xs text-gray-500 mt-1">Tip: Use \n\n for paragraph breaks. Images you upload below will appear between paragraphs automatically.</p>
+          </div>
+          <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" checked={form.published} onChange={e => setForm({...form, published: e.target.checked})} className="rounded" /><span className="text-gray-300">Published (visible on site)</span></label>
+          <div className="flex space-x-3">
+            <button onClick={savePost} className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700">{editing ? 'Update Post' : 'Create Post'}</button>
+            {editing && <button onClick={() => setEditing(null)} className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancel</button>}
+          </div>
         </div>
       </div>
+
       <h3 className="text-xl font-bold mb-4">All Posts ({posts.length})</h3>
-      <div className="space-y-3">
+      <div className="space-y-4">
         {posts.map(p => (
-          <div key={p.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
-            <div><div className="flex items-center space-x-2"><div className="font-bold">{p.title}</div><span className={`px-2 py-0.5 rounded text-xs ${p.published ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'}`}>{p.published ? 'Published' : 'Draft'}</span></div><div className="text-sm text-gray-400">{p.category} &bull; {new Date(p.created_at).toLocaleDateString()}</div></div>
-            <div className="flex space-x-2"><button onClick={() => setEditing(p)} className="px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700">Edit</button><button onClick={() => deletePost(p.id)} className="px-4 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm hover:bg-red-900/50">Delete</button></div>
+          <div key={p.id} className="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
+            {/* Post header */}
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                {p.hero_image_url ? (
+                  <img src={p.hero_image_url} alt={p.title} className="w-20 h-14 object-cover rounded-lg" />
+                ) : (
+                  <div className="w-20 h-14 bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-xs">No image</div>
+                )}
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold">{p.title}</span>
+                    <span className={`px-2 py-0.5 rounded text-xs ${p.published ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'}`}>{p.published ? 'Published' : 'Draft'}</span>
+                    {p.pdf_url && <span className="px-2 py-0.5 rounded text-xs bg-blue-900/30 text-blue-400">PDF</span>}
+                  </div>
+                  <div className="text-sm text-gray-400">{p.category} &bull; {new Date(p.created_at).toLocaleDateString()} &bull; {p.blog_images?.length || 0} images</div>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button onClick={() => setEditing(p)} className="px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700">Edit</button>
+                <button onClick={() => deletePost(p.id)} className="px-4 py-2 bg-red-900/30 text-red-400 rounded-lg text-sm hover:bg-red-900/50">Delete</button>
+              </div>
+            </div>
+
+            {/* Media section - expandable */}
+            <div className="border-t border-gray-800 p-4 bg-gray-950">
+              <div className="grid grid-cols-3 gap-4">
+                {/* Hero Image */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2 font-semibold">Hero Image (main blog image)</label>
+                  {p.hero_image_url ? (
+                    <div className="mb-2"><img src={p.hero_image_url} alt="Hero" className="w-full h-32 object-cover rounded-lg" /></div>
+                  ) : null}
+                  <label className="block bg-gray-800 border border-dashed border-gray-600 rounded-lg p-3 text-center text-xs cursor-pointer hover:border-red-600">
+                    <input type="file" accept="image/*" onChange={e => uploadHeroImage(e, p.id)} className="hidden" />
+                    {uploading === 'hero' ? 'Uploading...' : p.hero_image_url ? 'Replace Hero Image' : 'Upload Hero Image'}
+                  </label>
+                </div>
+
+                {/* PDF */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2 font-semibold">PDF Version (downloadable)</label>
+                  {p.pdf_url ? (
+                    <div className="mb-2"><a href={p.pdf_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline">View current PDF</a></div>
+                  ) : null}
+                  <label className="block bg-gray-800 border border-dashed border-gray-600 rounded-lg p-3 text-center text-xs cursor-pointer hover:border-red-600">
+                    <input type="file" accept=".pdf" onChange={e => uploadPdf(e, p.id)} className="hidden" />
+                    {uploading === 'pdf' ? 'Uploading...' : p.pdf_url ? 'Replace PDF' : 'Upload PDF'}
+                  </label>
+                </div>
+
+                {/* Content Images */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2 font-semibold">Content Images (shown in article)</label>
+                  <label className="block bg-gray-800 border border-dashed border-gray-600 rounded-lg p-3 text-center text-xs cursor-pointer hover:border-red-600">
+                    <input type="file" accept="image/*" onChange={e => uploadBlogImage(e, p.id)} className="hidden" />
+                    {uploading === 'image' ? 'Uploading...' : 'Add Image'}
+                  </label>
+                </div>
+              </div>
+
+              {/* Content images grid */}
+              {p.blog_images && p.blog_images.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-800">
+                  <label className="block text-xs text-gray-500 mb-2 font-semibold">Content Images ({p.blog_images.length})</label>
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {p.blog_images.sort((a,b) => a.sort_order - b.sort_order).map(img => (
+                      <div key={img.id} className="flex-shrink-0 relative">
+                        <img src={img.image_url} alt={img.caption || ''} className="w-32 h-24 object-cover rounded-lg" />
+                        <button onClick={() => deleteBlogImage(img.id)} className="absolute top-1 right-1 w-5 h-5 bg-red-600 rounded-full text-white text-xs flex items-center justify-center hover:bg-red-700">&times;</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ))}
         {posts.length === 0 && <p className="text-gray-500 text-center py-8">No blog posts yet.</p>}
