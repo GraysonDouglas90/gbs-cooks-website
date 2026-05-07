@@ -205,7 +205,7 @@ function useProducts() {
 function useBlogPosts() {
   const [posts, setPosts] = useState([]);
   useEffect(() => {
-    supabase.from('blog_posts').select('*').eq('published', true).order('created_at', { ascending: false }).then(({ data }) => setPosts(data || []));
+    supabase.from('blog_posts').select('*, blog_images(*)').eq('published', true).order('created_at', { ascending: false }).then(({ data }) => setPosts(data || []));
   }, []);
   return posts;
 }
@@ -848,6 +848,90 @@ function AboutPage({ settings, brands }) {
 function ServicePage() { return <div className="min-h-screen bg-gray-900"><section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">Service & Support</h1><p className="text-xl text-gray-400">Unrivalled service across Canada</p></div></section><section className="py-20"><div className="max-w-7xl mx-auto px-4 grid md:grid-cols-3 gap-8">{[{i:<Wrench className="text-red-500" size={48}/>,t:'Installation',d:'Professional installation from day one.'},{i:<Wrench className="text-red-500" size={48}/>,t:'Maintenance',d:'Regular maintenance for peak performance.'},{i:<Phone className="text-red-500" size={48}/>,t:'24/7 Support',d:'Round-the-clock support ensuring minimal downtime.'}].map((s,idx) => <div key={idx} className="bg-gray-800 border border-gray-700 p-8 rounded-2xl">{s.i}<h3 className="text-2xl font-bold mb-4 mt-6">{s.t}</h3><p className="text-gray-400">{s.d}</p></div>)}</div></section></div>; }
 
 function BlogPage({ blogPosts }) {
+  const [selectedPost, setSelectedPost] = useState(null);
+
+  if (selectedPost) {
+    const post = selectedPost;
+    const images = (post.blog_images || []).sort((a,b) => a.sort_order - b.sort_order);
+    const paragraphs = (post.content || '').split(/\\n\\n|\n\n/).filter(p => p.trim());
+
+    return (
+      <div className="min-h-screen bg-gray-900">
+        {/* Hero */}
+        {post.hero_image_url ? (
+          <section className="relative h-96 overflow-hidden">
+            <img src={post.hero_image_url} alt={post.title} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent"></div>
+            <div className="absolute bottom-0 left-0 right-0 p-8">
+              <div className="max-w-4xl mx-auto">
+                <button onClick={() => setSelectedPost(null)} className="text-gray-300 hover:text-red-500 mb-4 flex items-center"><ArrowLeft size={20} className="mr-2" />Back to The Drop</button>
+                <div className="text-sm text-red-500 font-semibold mb-2">{post.category}</div>
+                <h1 className="text-4xl md:text-5xl font-bold">{post.title}</h1>
+                <p className="text-gray-400 mt-3">{post.published_at ? new Date(post.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800">
+            <div className="max-w-4xl mx-auto px-4">
+              <button onClick={() => setSelectedPost(null)} className="text-gray-300 hover:text-red-500 mb-4 flex items-center"><ArrowLeft size={20} className="mr-2" />Back to The Drop</button>
+              <div className="text-sm text-red-500 font-semibold mb-2">{post.category}</div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-4">{post.title}</h1>
+              <p className="text-gray-400">{post.published_at ? new Date(post.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p>
+            </div>
+          </section>
+        )}
+
+        {/* Content */}
+        <section className="py-12">
+          <div className="max-w-3xl mx-auto px-4">
+            {paragraphs.length > 0 ? (
+              <div className="space-y-6">
+                {paragraphs.map((p, i) => (
+                  <React.Fragment key={i}>
+                    <p className="text-lg text-gray-300 leading-relaxed">{p.trim()}</p>
+                    {/* Insert an image after every 2-3 paragraphs */}
+                    {images.length > 0 && i > 0 && i % 2 === 1 && images[Math.floor(i / 2)] && (
+                      <div className="my-8 rounded-xl overflow-hidden">
+                        <img src={images[Math.floor(i / 2)].image_url} alt={images[Math.floor(i / 2)].caption || ''} className="w-full rounded-xl" />
+                        {images[Math.floor(i / 2)].caption && <p className="text-sm text-gray-500 mt-2 italic">{images[Math.floor(i / 2)].caption}</p>}
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400">No content yet.</p>
+            )}
+
+            {/* Remaining images at the bottom */}
+            {images.length > 0 && (
+              <div className="mt-12 space-y-6">
+                {images.filter((_, i) => i >= Math.floor(paragraphs.length / 2)).map(img => (
+                  <div key={img.id} className="rounded-xl overflow-hidden">
+                    <img src={img.image_url} alt={img.caption || ''} className="w-full rounded-xl" />
+                    {img.caption && <p className="text-sm text-gray-500 mt-2 italic">{img.caption}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* PDF download */}
+            {post.pdf_url && (
+              <div className="mt-12 bg-gray-800 border border-gray-700 rounded-xl p-6 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-lg">Download the full edition</h3>
+                  <p className="text-gray-400 text-sm">Get The Drop as a PDF</p>
+                </div>
+                <a href={post.pdf_url} target="_blank" rel="noopener noreferrer" className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 flex items-center"><Download size={20} className="mr-2" />Download PDF</a>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-900">
       <section className="bg-gradient-to-r from-gray-900 to-black py-20 border-b border-gray-800"><div className="max-w-7xl mx-auto px-4"><h1 className="text-5xl md:text-6xl font-bold mb-4">The Drop</h1><p className="text-xl text-gray-400">Insights, trends, and tips from foodservice</p></div></section>
@@ -855,10 +939,18 @@ function BlogPage({ blogPosts }) {
         {blogPosts.length > 0 ? (
           <div className="grid md:grid-cols-3 gap-8">
             {blogPosts.map(p => (
-              <div key={p.id} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden hover:border-red-600">
-                {p.image_url ? <img src={p.image_url} alt={p.title} className="w-full h-56 object-cover border-b border-gray-700" /> : <div className="bg-gradient-to-br from-gray-700 to-gray-900 h-56 flex items-center justify-center border-b border-gray-700"><ImageIcon size={64} className="text-gray-600" /></div>}
-                <div className="p-6"><div className="text-sm text-red-500 font-semibold mb-2">{p.category}</div><h3 className="text-2xl font-bold mb-3">{p.title}</h3><p className="text-gray-400 mb-4">{p.excerpt}</p><span className="text-sm text-gray-500">{p.published_at ? new Date(p.published_at).toLocaleDateString() : ''}</span></div>
-              </div>
+              <button key={p.id} onClick={() => setSelectedPost(p)} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden hover:border-red-600 transition-all group text-left">
+                {p.hero_image_url ? <img src={p.hero_image_url} alt={p.title} className="w-full h-56 object-cover border-b border-gray-700" /> : <div className="bg-gradient-to-br from-gray-700 to-gray-900 h-56 flex items-center justify-center border-b border-gray-700"><ImageIcon size={64} className="text-gray-600" /></div>}
+                <div className="p-6">
+                  <div className="text-sm text-red-500 font-semibold mb-2">{p.category}</div>
+                  <h3 className="text-2xl font-bold mb-3 group-hover:text-red-500 transition-colors">{p.title}</h3>
+                  <p className="text-gray-400 mb-4">{p.excerpt}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">{p.published_at ? new Date(p.published_at).toLocaleDateString() : ''}</span>
+                    {p.pdf_url && <span className="text-xs text-blue-400">PDF available</span>}
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
         ) : (
