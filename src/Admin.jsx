@@ -378,6 +378,17 @@ function ImagesTab({ products, fetchProducts, showMsg }) {
   const [uploading, setUploading] = useState(false);
   const [docUploading, setDocUploading] = useState(false);
   const [docName, setDocName] = useState('');
+  const [filterBrand, setFilterBrand] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Get unique brands from products
+  const brandsInProducts = [...new Set(products.map(p => p.brand_id))].sort();
+
+  const filteredProducts = products.filter(p => {
+    const matchesBrand = filterBrand === 'all' || p.brand_id === filterBrand;
+    const matchesSearch = !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.model.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesBrand && matchesSearch;
+  });
 
   const uploadImage = async (e) => {
     const file = e.target.files[0];
@@ -429,8 +440,18 @@ function ImagesTab({ products, fetchProducts, showMsg }) {
     <div>
       <h2 className="text-2xl font-bold mb-6">Manage Images & Documents</h2>
       <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-8">
-        <label className="block text-sm text-gray-400 mb-2">Select a product</label>
-        <select value={selectedProduct?.id || ''} onChange={e => setSelectedProduct(products.find(p => p.id === e.target.value) || null)} className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white"><option value="">Choose a product...</option>{products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.model})</option>)}</select>
+        <label className="block text-sm text-gray-400 mb-2">Find a product</label>
+        <div className="flex gap-3 mb-3">
+          <select value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setSelectedProduct(null); }} className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm">
+            <option value="all">All Brands</option>
+            {brandsInProducts.map(bId => <option key={bId} value={bId}>{bId}</option>)}
+          </select>
+          <input type="text" placeholder="Search by name or model..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm" />
+        </div>
+        <select value={selectedProduct?.id || ''} onChange={e => setSelectedProduct(products.find(p => p.id === e.target.value) || null)} className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white">
+          <option value="">Choose a product ({filteredProducts.length} shown)...</option>
+          {filteredProducts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.model}) — {p.brand_id}</option>)}
+        </select>
       </div>
 
       {currentProduct && (
