@@ -27,69 +27,136 @@ const provinces = [
 
 const clientLogos = ['Client 1','Client 2','Client 3','Client 4','Client 5','Client 6','Client 7','Client 8','Client 9','Client 10'];
 
-// Canada map - simplified but recognizable province outlines positioned geographically
-// Each province is positioned relative to a full Canada map spanning the scroll
+// Real Canada map with recognizable province outlines
+// Provinces positioned geographically with proper shapes
 function CanadaMap({ progress, activeIndex }) {
-  // Province shapes with geographic x positions (0=west coast, 100=east coast)
-  const mapProvinces = [
-    { abbr: 'BC', x: 2, w: 12, path: "M0,15 L3,5 L6,0 L10,2 L14,8 L16,5 L20,10 L22,4 L26,8 L30,6 L28,18 L32,25 L35,35 L38,30 L40,42 L38,55 L35,60 L40,70 L38,80 L32,88 L25,92 L18,95 L10,90 L5,82 L2,70 L0,55 Z" },
-    { abbr: 'AB', x: 14, w: 10, path: "M0,8 L32,8 L32,92 L0,92 Z" },
-    { abbr: 'SK', x: 24, w: 10, path: "M0,8 L32,8 L32,92 L0,92 Z" },
-    { abbr: 'MB', x: 34, w: 11, path: "M0,8 L28,8 L32,18 L30,28 L34,38 L32,48 L28,55 L32,65 L30,78 L28,92 L0,92 Z" },
-    { abbr: 'ON', x: 44, w: 16, path: "M0,35 L5,28 L12,18 L20,10 L30,5 L40,0 L48,8 L52,18 L50,28 L55,35 L58,45 L55,55 L48,62 L52,70 L55,80 L48,88 L38,92 L25,90 L15,82 L8,70 L2,58 L0,48 Z" },
-    { abbr: 'QC', x: 58, w: 18, path: "M0,30 L8,18 L18,8 L28,0 L42,5 L52,15 L55,28 L50,38 L55,48 L52,60 L48,68 L55,78 L48,88 L35,92 L22,88 L12,78 L5,65 L2,50 L0,40 Z" },
-    { abbr: 'NB', x: 76, w: 7, path: "M0,15 L8,5 L18,0 L28,8 L32,20 L28,35 L20,42 L10,38 L2,28 Z" },
-    { abbr: 'NS', x: 82, w: 8, path: "M0,20 L5,8 L15,0 L25,3 L32,12 L35,22 L28,32 L18,38 L8,35 L2,28 Z" },
-    { abbr: 'PEI', x: 82, w: 5, path: "M0,5 L5,0 L18,0 L22,5 L18,12 L5,12 Z" },
-    { abbr: 'NL', x: 88, w: 10, path: "M0,22 L8,8 L18,0 L28,5 L35,18 L32,32 L25,42 L30,55 L22,62 L12,58 L5,45 L2,35 Z" }
+  // More detailed province paths based on real geography
+  // Viewbox is 1000x500, provinces positioned west to east
+  const mapData = [
+    { abbr: 'BC', idx: 0, path: "M40,120 L55,90 L50,70 L60,50 L55,35 L70,25 L85,30 L95,20 L110,25 L115,40 L120,30 L130,35 L128,50 L135,55 L130,70 L140,80 L138,95 L145,110 L155,120 L160,140 L155,165 L165,180 L158,200 L165,220 L155,240 L148,260 L135,275 L120,285 L105,280 L90,290 L75,280 L60,270 L50,255 L45,235 L40,215 L35,195 L30,175 L35,155 L40,140 Z", color: '#dc2626' },
+    { abbr: 'AB', idx: 1, path: "M155,45 L230,45 L230,280 L155,280 L148,260 L155,240 L165,220 L155,200 L165,180 L155,165 L160,140 L155,120 L145,110 L138,95 L145,80 L140,65 L148,55 Z", color: '#dc2626' },
+    { abbr: 'SK', idx: 2, path: "M230,45 L310,45 L310,280 L230,280 Z", color: '#dc2626' },
+    { abbr: 'MB', idx: 3, path: "M310,45 L380,30 L395,45 L390,70 L400,90 L395,110 L385,130 L390,150 L400,170 L395,190 L385,210 L390,235 L385,260 L380,280 L310,280 Z", color: '#dc2626' },
+    { abbr: 'ON', idx: 4, path: "M380,80 L400,60 L420,45 L445,35 L470,30 L500,25 L530,30 L550,45 L565,65 L570,90 L560,110 L565,130 L555,150 L545,165 L535,180 L540,200 L550,215 L545,235 L530,250 L510,260 L490,265 L465,270 L445,275 L420,280 L400,280 L385,260 L390,235 L395,210 L385,190 L395,170 L400,150 L390,130 L395,110 L400,90 Z", color: '#dc2626' },
+    { abbr: 'QC', idx: 5, path: "M550,20 L580,15 L610,10 L640,15 L670,25 L700,20 L720,30 L735,50 L740,75 L730,95 L735,115 L725,135 L715,155 L720,175 L710,195 L700,210 L690,230 L680,245 L660,255 L640,260 L615,265 L590,270 L565,275 L545,270 L530,255 L540,235 L550,215 L545,195 L535,180 L545,165 L555,150 L565,130 L560,110 L570,90 L565,65 L555,50 Z", color: '#dc2626' },
+    { abbr: 'NB', idx: 6, path: "M740,200 L755,185 L770,180 L785,185 L795,200 L790,218 L780,230 L765,235 L750,228 L740,215 Z", color: '#dc2626' },
+    { abbr: 'NS', idx: 7, path: "M790,210 L810,195 L830,190 L850,195 L860,210 L855,225 L870,230 L875,245 L860,255 L840,250 L825,255 L810,248 L800,235 L790,225 Z", color: '#dc2626' },
+    { abbr: 'PEI', idx: 8, path: "M805,178 L815,172 L830,170 L845,174 L850,182 L840,188 L825,190 L810,186 Z", color: '#dc2626' },
+    { abbr: 'NL', idx: 9, path: "M850,60 L870,45 L890,40 L910,45 L925,60 L930,80 L935,100 L925,120 L930,140 L920,155 L905,165 L890,170 L875,165 L860,155 L855,135 L850,115 L845,95 L848,75 Z", color: '#dc2626' }
   ];
 
+  // Journey line connecting province centers
+  const centers = [
+    { x: 100, y: 170 }, // BC
+    { x: 192, y: 162 }, // AB
+    { x: 270, y: 162 }, // SK
+    { x: 350, y: 162 }, // MB
+    { x: 475, y: 155 }, // ON
+    { x: 640, y: 145 }, // QC
+    { x: 765, y: 208 }, // NB
+    { x: 835, y: 222 }, // NS
+    { x: 828, y: 180 }, // PEI
+    { x: 890, y: 108 }  // NL
+  ];
+
+  const journeyLine = centers.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
+
+  // Calculate how much of the journey line to show based on progress
+  const activeCenter = centers[activeIndex];
+
   return (
-    <div style={{
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      overflow: 'hidden',
-      pointerEvents: 'none'
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        transform: `translateX(${50 - progress * 100}%) translateY(-50%)`,
-        transition: 'transform 0.3s ease-out',
-        width: '300vw',
-        height: '80vh',
-        display: 'flex',
-        alignItems: 'center'
-      }}>
-        {mapProvinces.map((prov, idx) => {
-          const isActive = idx === activeIndex;
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      <svg
+        viewBox="0 0 1000 350"
+        preserveAspectRatio="xMidYMid meet"
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: `translate(calc(-50% + ${(0.5 - progress) * 40}%), -50%)`,
+          transition: 'transform 0.4s ease-out',
+          width: '160%',
+          height: '100%',
+          maxHeight: '80vh',
+          opacity: 1
+        }}
+      >
+        {/* Province shapes */}
+        {mapData.map((prov) => {
+          const isActive = prov.idx === activeIndex;
           return (
-            <svg
-              key={prov.abbr}
-              viewBox="0 0 60 100"
-              style={{
-                position: 'absolute',
-                left: `${prov.x}%`,
-                width: `${prov.w}%`,
-                height: '100%',
-                opacity: isActive ? 0.2 : 0.04,
-                transition: 'opacity 0.8s ease',
-                filter: isActive ? 'none' : 'none'
-              }}
-            >
+            <g key={prov.abbr}>
+              {/* Glow effect for active province */}
+              {isActive && (
+                <path
+                  d={prov.path}
+                  fill="#dc2626"
+                  opacity="0.15"
+                  filter="url(#glow)"
+                />
+              )}
               <path
                 d={prov.path}
-                fill={isActive ? '#dc2626' : '#991b1b'}
-                stroke={isActive ? '#ef4444' : '#7f1d1d'}
-                strokeWidth="0.5"
+                fill={isActive ? '#dc2626' : '#1f1f1f'}
+                fillOpacity={isActive ? 0.35 : 0.15}
+                stroke={isActive ? '#ef4444' : '#333'}
+                strokeWidth={isActive ? 1.5 : 0.5}
+                strokeOpacity={isActive ? 0.8 : 0.3}
+                style={{ transition: 'all 0.6s ease' }}
               />
-            </svg>
+            </g>
           );
         })}
-      </div>
+
+        {/* Journey dotted line */}
+        <path
+          d={journeyLine}
+          fill="none"
+          stroke="#555"
+          strokeWidth="1"
+          strokeDasharray="4,4"
+          opacity="0.4"
+        />
+
+        {/* Active journey line (filled portion) */}
+        <path
+          d={centers.slice(0, activeIndex + 1).map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ')}
+          fill="none"
+          stroke="#ef4444"
+          strokeWidth="2"
+          opacity="0.7"
+          style={{ transition: 'all 0.4s ease' }}
+        />
+
+        {/* Province center dots */}
+        {centers.map((c, i) => (
+          <g key={i}>
+            <circle
+              cx={c.x} cy={c.y} r={i === activeIndex ? 6 : 3}
+              fill={i <= activeIndex ? '#ef4444' : '#555'}
+              opacity={i === activeIndex ? 1 : 0.6}
+              style={{ transition: 'all 0.4s ease' }}
+            />
+            {i === activeIndex && (
+              <circle cx={c.x} cy={c.y} r="12" fill="none" stroke="#ef4444" strokeWidth="1" opacity="0.4">
+                <animate attributeName="r" from="8" to="18" dur="2s" repeatCount="indefinite" />
+                <animate attributeName="opacity" from="0.5" to="0" dur="2s" repeatCount="indefinite" />
+              </circle>
+            )}
+          </g>
+        ))}
+
+        {/* Glow filter */}
+        <defs>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+      </svg>
     </div>
   );
 }
