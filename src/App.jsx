@@ -492,11 +492,28 @@ function ProductsPage({ navigate, brands, allProducts, initialBrand, initialCate
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState(initialCategory ? 'category' : 'brand');
   const [activeCategory, setActiveCategory] = useState(initialCategory || null);
+  const [activeSubFilter, setActiveSubFilter] = useState('all');
+
+  // Get unique categories for the active brand
+  const getBrandCategories = () => {
+    if (!activeBrand) return [];
+    const brandProducts = allProducts.filter(p => p.brand_id === activeBrand);
+    const cats = [...new Set(brandProducts.map(p => p.category).filter(Boolean))];
+    return cats.sort();
+  };
+
+  const brandCategories = getBrandCategories();
+
+  // Reset sub-filter when brand changes
+  useEffect(() => { setActiveSubFilter('all'); }, [activeBrand]);
 
   const getFilteredProducts = () => {
     let prods = [];
     if (viewMode === 'brand' && activeBrand) {
       prods = allProducts.filter(p => p.brand_id === activeBrand);
+      if (activeSubFilter !== 'all') {
+        prods = prods.filter(p => p.category === activeSubFilter);
+      }
     } else if (viewMode === 'category' && activeCategory) {
       const cat = productCategories.find(c => c.id === activeCategory);
       if (cat) prods = allProducts.filter(p => cat.brandIds.includes(p.brand_id));
@@ -531,7 +548,7 @@ function ProductsPage({ navigate, brands, allProducts, initialBrand, initialCate
       )}
 
       <section className="py-12"><div className="max-w-7xl mx-auto px-4">
-        {viewMode === 'brand' && currentBrandInfo && <div className="mb-10"><h2 className="text-3xl font-bold mb-2">{currentBrandInfo.name}</h2><p className="text-lg text-gray-400">{currentBrandInfo.tagline}</p></div>}
+        {viewMode === 'brand' && currentBrandInfo && <div className="mb-10"><h2 className="text-3xl font-bold mb-2">{currentBrandInfo.name}</h2><p className="text-lg text-gray-400 mb-4">{currentBrandInfo.tagline}</p>{brandCategories.length > 1 && <div className="flex flex-wrap gap-2">{<button onClick={() => setActiveSubFilter('all')} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeSubFilter === 'all' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700 hover:border-gray-500'}`}>All ({allProducts.filter(p => p.brand_id === activeBrand).length})</button>}{brandCategories.map(cat => { const count = allProducts.filter(p => p.brand_id === activeBrand && p.category === cat).length; return <button key={cat} onClick={() => setActiveSubFilter(cat)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeSubFilter === cat ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700 hover:border-gray-500'}`}>{cat} ({count})</button>; })}</div>}</div>}
         {viewMode === 'category' && activeCategory && <div className="mb-10"><h2 className="text-3xl font-bold mb-2">{productCategories.find(c=>c.id===activeCategory)?.name}</h2><p className="text-lg text-gray-400">{productCategories.find(c=>c.id===activeCategory)?.description}</p></div>}
         {searchTerm && viewMode === 'all' && <div className="mb-10"><h2 className="text-3xl font-bold mb-2">Search Results</h2><p className="text-lg text-gray-400">{filteredProducts.length} found for "{searchTerm}"</p></div>}
 
